@@ -80,8 +80,8 @@ function main() {
     web.close();
     setTimeout(() => process.exit(0), 500).unref();
   };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  // SIGHUP: the terminal window was closed (the usual way launchers are stopped).
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => shutdown(signal));
 }
 
 main();

@@ -32,7 +32,8 @@
 - Offline devices stay visible (dimmed, marked **OFFLINE**) instead of disappearing.
 - Devices are sorted by name. Search also matches channel names.
 - `--help`, `--version`, `--host`, `--open`, `--debug` and a config file. Friendly message when the port is in use.
-- Launchers install the current Node.js LTS with checksum verification and open the browser once the server is ready.
+- Launchers install the current Node.js LTS (Homebrew / winget, or a checksum-verified download from nodejs.org) and open the browser once the server is ready.
+- The bridge also unsubscribes from devices when its terminal window is closed (SIGHUP).
 - High-DPI (Retina / iPad) meter rendering. Meters are redrawn only when they change.
 - About 25× less WebSocket traffic (228 KB/s → 9 KB/s per browser on an 8-device test network): device structure is sent only when it changes, and meters are sent as compact arrays.
 

@@ -15,7 +15,7 @@ A real-time meter bridge for **Audinate Dante** networks. Run it on any computer
 ## Screenshots
 
 ### Transmitters
-Every transmitting device with 60 FPS segmented meters, peak hold, latching clip indicators and dBFS readouts:
+Every transmitting device with segmented meters, peak hold, latching clip indicators and dBFS readouts:
 
 ![Transmitter Overview](Screenshots/Tx%20Overview.png)
 
@@ -31,10 +31,10 @@ Each receive channel shows the transmitter it's subscribed to. Click it to jump 
 ## Features
 
 - **Transmitter and receiver views** with 16-channel banks for large devices.
-- **Segmented meters** (-60 to 0 dBFS) with green / yellow / amber / red zones, peak hold and a 1.5 s clip latch.
+- **Segmented meters** (-60 to 0 dBFS) with green / yellow / amber / red zones, a 1 s peak hold that then falls smoothly, and a 1.5 s clip latch. Levels update as fast as the devices send them (about 10 times per second on the devices tested).
 - **Routing at a glance:** receive channels show their source device and channel, whether the subscription is actually connected, and a click-through to the transmitter.
-- **Device health:** primary / secondary network sync indicators, secondary-network IP, clock leader (PTP grandmaster) highlight, and sample rate — all read from the devices, never guessed.
-- **Offline detection:** a device that drops off the network stays on screen, dimmed and marked **OFFLINE**, until it returns or you press **Refresh Devices**.
+- **Device health:** primary / secondary network sync indicators, secondary-network IP, clock leader (PTP grandmaster) highlight, and sample rate, all read from the devices. If a device doesn't report something (for example its clock status), the indicator says so instead of assuming it's fine.
+- **Offline detection:** a device that goes silent for 7 seconds stays on screen, dimmed and marked **OFFLINE**, for up to a minute (or until you press **Refresh Devices**) so a dropout is easy to spot.
 - **Device identity:** manufacturer, model and versions from Dante Controller's local database when it's installed, plus optional overrides you define yourself.
 - **Search** by device name, IP, model or channel name. Collapse / expand state is remembered per device.
 - **NIC switching** from the header without restarting.
@@ -50,9 +50,9 @@ Each receive channel shows the transmitter it's subscribed to. Click it to jump 
 | **macOS** | `First Time Running - Click Here - Mac.command` | `Start Dante Meter Bridge - Mac.command` |
 | **Windows** | `First Time Running - Click Here - Windows.bat` | `Start Dante Meter Bridge - Windows.bat` |
 
-The first-time scripts install the current Node.js LTS from nodejs.org (verifying its SHA-256 checksum) if Node.js 18+ isn't already present, then start the bridge and open your browser.
+If Node.js 18 or newer isn't installed, the first-time scripts install the current LTS release: through Homebrew (macOS) or winget (Windows) when available, otherwise straight from nodejs.org with the download's SHA-256 checksum verified. Then they start the bridge and open your browser. To stop the bridge, close its window or press Ctrl+C.
 
-> **macOS:** if you see "cannot be opened because it is from an unidentified developer", right-click the file and choose **Open**.
+> **macOS:** if the file is blocked as coming from an unidentified developer, open **System Settings → Privacy & Security** and click **Open Anyway**.
 
 ### Command line
 
@@ -114,7 +114,7 @@ Dante devices ──(UDP)──▶ Meter Bridge (Node.js) ──(WebSocket)─�
 | Discovery | mDNS (`_netaudio-arc._udp`, `_netaudio-cmc._udp`), Dante heartbeats (224.0.0.233:8708), device-info multicast (224.0.0.231:8702) and probing hosts in the ARP table |
 | Names, channels, routing, sample rate | ARC queries (UDP 4440) every 3 s |
 | Clock and secondary network | Settings queries (UDP 8700/8702) and heartbeat link status. The clock leader is identified from the PTP grandmaster ID. |
-| Levels | A metering subscription sent to each device (UDP 8800). The device then streams levels to the bridge at 10 Hz on UDP 8751. |
+| Levels | A metering subscription sent to each device (UDP 8800). The device then streams levels to the bridge on UDP 8751, about 10 times per second on the devices tested. The server forwards the latest levels to browsers 20 times per second, and each meter is redrawn only when its value changes. |
 
 **Metering.** The bridge asks each device to stream its meters to this computer, identifying itself by its own MAC address. This is the same request Dante Controller sends, so each Controller and each bridge gets its own independent stream. If another app on this computer already uses port 8751, the bridge picks a free port and tells the devices to use that instead. On shutdown, the bridge tells every device to stop streaming.
 
@@ -126,7 +126,7 @@ Receivers without their own meters show the level of the transmitter channel the
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/devices` | All devices with structure and current levels (`peak` = raw Dante byte, `dbfs` = level; `null` = silence / no data) |
+| `GET /api/devices` | All devices with structure and current levels. `levels.tx.peak` / `levels.rx.peak` are raw Dante level bytes (`null` = no recent data). `dbfs` holds the same levels in dBFS (`null` = silent or no data). |
 | `GET /api/status` | Health: version, uptime, bound interface, device counts, connected clients |
 | `GET /api/interfaces` | Available network interfaces |
 | `POST /api/interface` | Switch interface: `{"ip": "169.254.x.x"}` or `{"ip": "all"}` |
@@ -136,17 +136,20 @@ Receivers without their own meters show the level of the transmitter channel the
 
 ## Network & firewall
 
-Allow incoming traffic for Node.js on the Dante interface:
+Allow Node.js to accept incoming connections. The bridge listens on:
 
-- **UDP 8751** — metering stream (or the fallback port shown in the log)
-- **UDP 4440, 8700, 8702, 8708, 8800, 5353** — discovery and device queries
-- **TCP 8752** (or your `--port`) — the web UI
+- **UDP 8751**: metering stream (or the fallback port shown in the log)
+- **UDP 8702, 8708**: Dante device-info and heartbeat multicast
+- **UDP 5353**: mDNS (or a free port if the OS is already using 5353)
+- **TCP 8752** (or your `--port`): the web UI
+
+It sends queries to devices on UDP 4440, 8700, 8702 and 8800. Replies come back to temporary ports, which stateful firewalls allow automatically.
 
 On macOS, accept the "allow incoming connections" prompt the first time you run it. On Windows, allow Node.js through Windows Defender Firewall on **Private** networks.
 
 ## Troubleshooting
 
-- **No devices:** check the NIC selector is on your Dante network. Run with `--debug` for per-packet logging.
+- **No devices:** check the NIC selector is on your Dante network. Run with `--debug` for extra diagnostic logging.
 - **Devices listed but no meters:** check the firewall allows incoming UDP on the metering port.
 - **"Port 8752 is already in use":** the bridge is probably already running. Close the other window or use `--port`.
 
