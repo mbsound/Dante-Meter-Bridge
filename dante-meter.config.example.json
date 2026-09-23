@@ -1,0 +1,16 @@
+{
+  "port": 8752,
+  "host": "0.0.0.0",
+  "nic": null,
+  "open": false,
+  "debug": false,
+  "deviceOverrides": {
+    "Stagebox-1": {
+      "manufacturer": "Example Audio Co",
+      "modelName": "SB-32 Stagebox",
+      "productVersion": "1.0.0",
+      "softwareVersion": null,
+      "firmwareVersion": null
+    }
+  }
+}

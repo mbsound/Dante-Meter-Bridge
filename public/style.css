@@ -1,0 +1,1147 @@
+/* Dante Audio Meter Bridge - Stylesheet */
+
+:root {
+  --bg-base: #0b0d11;
+  --bg-surface: #14171f;
+  --bg-card: #1b202a;
+  --bg-card-header: #222836;
+  --bg-card-header-hover: #2a3142;
+  --bg-strip: #12151d;
+  --border-subtle: #2d3446;
+  --border-active: #3f4961;
+
+  --text-main: #f0f3f8;
+  --text-muted: #8b95a5;
+  --text-dim: #5c6677;
+
+  --accent-red: #e53935;
+  --accent-red-glow: rgba(229, 57, 53, 0.4);
+  --accent-green: #00e676;
+  --accent-yellow: #ffeb3b;
+  --accent-amber: #ff9800;
+  --accent-blue: #2196f3;
+
+  --meter-track: #0e1015;
+  --meter-border: #1e222d;
+  --meter-seg-off: #1b1e28;
+  --meter-clip-off: #331518;
+  --meter-clip-on: #ff1744;
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: 13px;
+  line-height: 1.4;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header Section */
+.top-header {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: nowrap;
+  z-index: 100;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.brand-logo svg {
+  display: block;
+}
+
+.brand-titles h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.network-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #757575;
+  display: inline-block;
+}
+
+.status-dot.live {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.7);
+}
+
+.status-dot.warning {
+  background-color: var(--accent-yellow);
+}
+
+.nic-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  background-color: #1e2433;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.nic-select-wrap label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #7e8ba3;
+  text-transform: uppercase;
+}
+
+.nic-select {
+  background: transparent;
+  border: none;
+  color: #64b5f6;
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  max-width: 240px;
+}
+
+.nic-select option {
+  background-color: #1a1e29;
+  color: var(--text-main);
+  font-family: monospace;
+}
+
+/* Direction Tabs (TRANSMITTER / RECEIVER) */
+.direction-tabs {
+  display: flex;
+  background-color: #0c0e13;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  gap: 4px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.15s ease;
+  min-width: 140px;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.tab-btn.active {
+  background-color: var(--accent-red);
+  color: #ffffff;
+  box-shadow: 0 2px 10px var(--accent-red-glow);
+}
+
+.tab-btn .tab-icon {
+  font-size: 9px;
+  margin-bottom: 1px;
+  opacity: 0.8;
+}
+
+.tab-btn .tab-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+}
+
+.tab-btn .tab-sub {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* Toolbar Controls */
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  background-color: #101218;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 4px 8px;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 12px;
+  outline: none;
+  width: 170px;
+}
+
+.btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  background-color: #222734;
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  background-color: #2c3344;
+  border-color: var(--border-active);
+}
+
+.btn-icon-only {
+  padding: 6px 8px;
+}
+
+/* Workspace Sub-Toolbar */
+.workspace-toolbar {
+  background-color: #10131a;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 7px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 90;
+}
+
+.workspace-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workspace-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-collapse-toggle {
+  background-color: #1e2433;
+  color: #ffffff;
+  border: 1px solid var(--border-active);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.btn-collapse-toggle:hover {
+  background-color: #283144;
+  border-color: #55668a;
+}
+
+.toolbar-chevron {
+  transition: transform 0.2s ease;
+}
+
+.workspace-stats-pill {
+  font-size: 11px;
+  color: var(--text-muted);
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 4px 9px;
+  border-radius: 4px;
+}
+
+.workspace-stats-pill strong {
+  color: var(--accent-green);
+}
+
+.sync-legend {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(255, 255, 255, 0.04);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  user-select: none;
+}
+
+.sync-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sync-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.sync-legend-dot.green {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 5px rgba(0, 230, 118, 0.7);
+}
+
+.sync-legend-dot.none {
+  background-color: transparent;
+  border: 1px solid #475569;
+}
+
+/* Main Viewport */
+.main-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 18px;
+  display: block;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent-red);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state .subtext {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Device Accordion Card */
+.device-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.device-card.clipped {
+  border-color: rgba(255, 23, 68, 0.6);
+}
+
+/* Clock Leader Module Card: Outlined in GREEN */
+.device-card.clock-leader {
+  border: 2px solid #00e676 !important;
+  box-shadow: 0 0 16px rgba(0, 230, 118, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+.device-card.clock-leader .device-header {
+  border-bottom-color: rgba(0, 230, 118, 0.3);
+}
+
+.device-card.collapsed {
+  min-height: 52px;
+  height: 52px;
+}
+
+.device-header {
+  background-color: var(--bg-card-header);
+  height: 52px;
+  min-height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  transition: background-color 0.15s ease;
+}
+
+.device-header:hover {
+  background-color: var(--bg-card-header-hover);
+}
+
+.device-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+/* Bank Selector Bar for Large Devices (>16 channels) */
+.bank-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #151821;
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
+.bank-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #727e94;
+  text-transform: uppercase;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.bank-btn {
+  background-color: #212634;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: monospace;
+  padding: 3px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.bank-btn:hover {
+  background-color: #2d3448;
+  color: #ffffff;
+}
+
+.bank-btn.active {
+  background-color: var(--accent-red);
+  color: #ffffff;
+  border-color: #ff5252;
+  font-weight: 700;
+}
+
+.device-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+.device-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: monospace;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #c2c9d6;
+}
+
+.device-ip-badge {
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.device-badge.sr {
+  background-color: rgba(33, 150, 243, 0.15);
+  color: #64b5f6;
+}
+
+.device-badge.channels {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: #69f0ae;
+  font-weight: 600;
+}
+
+/* Clock Leader Badge in Header */
+.device-badge.leader {
+  background-color: rgba(0, 230, 118, 0.18);
+  border: 1px solid #00e676;
+  color: #00e676;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.35);
+}
+
+/* Dual Network Sync Indicators (Primary Left, Secondary Right) */
+.sync-dots-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  background-color: rgba(10, 13, 18, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: transparent;
+  border: 1px solid #384256;
+  display: inline-block;
+  transition: all 0.2s ease;
+  cursor: help;
+}
+
+/* Good State: Vibrant Green */
+.sync-dot.good {
+  background-color: var(--accent-green);
+  border-color: #00c853;
+  box-shadow: 0 0 7px rgba(0, 230, 118, 0.75);
+}
+
+/* Syncing State: Amber */
+.sync-dot.syncing {
+  background-color: var(--accent-yellow);
+  border-color: #ffd600;
+  box-shadow: 0 0 6px rgba(255, 235, 59, 0.65);
+}
+
+/* Error State: Solid Red */
+.sync-dot.error {
+  background-color: #ff1744;
+  border-color: #d50000;
+  box-shadow: 0 0 8px rgba(255, 23, 68, 0.85);
+}
+
+/* Unsupported or No Data: No color (hollow outline) */
+.sync-dot.unsupported,
+.sync-dot.none {
+  background-color: transparent;
+  border-color: #2b3244;
+  box-shadow: none;
+  opacity: 0.35;
+}
+
+.device-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+/* Device Identity & Versions in Module Header */
+.device-identity-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.2;
+  text-align: right;
+  user-select: text;
+}
+
+.device-id-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.device-manufacturer {
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.device-id-sep {
+  color: #475569;
+  font-size: 9px;
+}
+
+.device-model {
+  color: #f1f5f9;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.device-id-versions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ver-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  background-color: #121620;
+  border: 1px solid #283244;
+  color: #cbd5e1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  letter-spacing: 0.2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.ver-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ver-val {
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.ver-tag.prod .ver-val {
+  color: #38bdf8;
+}
+
+.ver-tag.sw .ver-val {
+  color: #a78bfa;
+}
+
+.ver-tag.fw .ver-val {
+  color: #34d399;
+}
+
+/* Mini Activity Preview in Header */
+.mini-activity-preview {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 2px 6px;
+  background-color: #12151d;
+  border-radius: 4px;
+}
+
+.mini-bar {
+  width: 3px;
+  height: 12px;
+  background-color: #2a3142;
+  border-radius: 1px;
+  display: inline-block;
+  transform-origin: bottom;
+  transition: height 0.08s ease, background-color 0.08s ease;
+}
+
+.mini-bar.active {
+  background-color: var(--accent-green);
+}
+
+.mini-bar.clip {
+  background-color: var(--meter-clip-on);
+}
+
+.collapse-icon-btn {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 6px 7px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  margin-right: 4px;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.collapse-icon-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.collapse-icon-btn:active {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.collapse-icon-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-red);
+}
+
+.chevron-icon {
+  width: 20px;
+  height: 20px;
+  color: inherit;
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.device-card.collapsed .chevron-icon {
+  transform: rotate(-90deg);
+}
+
+.device-body {
+  padding: 10px;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.device-card.collapsed .device-body {
+  display: none;
+}
+
+/* 16-METER ROW GRID LAYOUT */
+.meters-grid-16 {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 5px;
+  row-gap: 12px;
+}
+
+/* Channel Meter Strip for 16-wide */
+.meter-strip {
+  background-color: var(--bg-strip);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 6px 3px 6px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+  height: 220px;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, outline 0.2s ease, box-shadow 0.2s ease;
+}
+
+.meter-strip[data-dir="rx"] {
+  height: 256px;
+}
+
+.meter-strip:hover {
+  border-color: var(--border-active);
+}
+
+/* Rx Connected Transmitter Box (Two lines: Device on top, Channel on bottom) */
+.rx-source-box {
+  width: 96%;
+  height: 30px;
+  min-height: 30px;
+  margin: 1px 0 4px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  box-sizing: border-box;
+  text-align: center;
+  user-select: none;
+  overflow: hidden;
+  padding: 2px 3px;
+  transition: all 0.15s ease;
+}
+
+.rx-source-box.empty {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+.rx-source-box.connected {
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid rgba(255, 152, 0, 0.45);
+  color: #ffb74d;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.rx-source-box.connected:hover {
+  background: rgba(255, 152, 0, 0.26);
+  border-color: #ff9800;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.rx-source-box.connected:active {
+  transform: translateY(0);
+  background: rgba(255, 152, 0, 0.38);
+}
+
+.rx-source-box .rx-source-dev {
+  width: 100%;
+  font-size: 8px;
+  font-weight: 700;
+  color: #ffcc80;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+  text-transform: uppercase;
+}
+
+.rx-source-box.connected:hover .rx-source-dev {
+  color: #ffffff;
+}
+
+.rx-source-box .rx-source-chan {
+  width: 100%;
+  font-size: 9px;
+  font-weight: 600;
+  color: #ff9800;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.rx-source-box.connected:hover .rx-source-chan {
+  color: #ffb74d;
+}
+
+/* Orange Outline Highlight for Transmitters (5 seconds) */
+.highlight-orange-outline {
+  outline: 3px solid #ff9800 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 22px rgba(255, 152, 0, 0.85), inset 0 0 10px rgba(255, 152, 0, 0.25) !important;
+  border-color: #ff9800 !important;
+  animation: pulse-orange-outline 1.5s ease-in-out infinite alternate;
+  z-index: 25;
+}
+
+@keyframes pulse-orange-outline {
+  0% {
+    box-shadow: 0 0 12px rgba(255, 152, 0, 0.55), inset 0 0 5px rgba(255, 152, 0, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 28px rgba(255, 152, 0, 0.95), inset 0 0 15px rgba(255, 152, 0, 0.35);
+  }
+}
+
+.device-card.highlight-device-active {
+  border-color: rgba(255, 152, 0, 0.75) !important;
+  box-shadow: 0 0 14px rgba(255, 152, 0, 0.3) !important;
+}
+
+.strip-header {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 4px;
+  height: 28px;
+  overflow: hidden;
+}
+
+.ch-number {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  font-family: monospace;
+}
+
+.ch-name {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-top: 1px;
+}
+
+/* Clip LED Indicator */
+.clip-led {
+  width: 22px;
+  height: 6px;
+  border-radius: 2px;
+  background-color: #2b1216;
+  border: 1px solid rgba(255, 23, 68, 0.3);
+  margin-bottom: 4px;
+}
+
+.clip-led.active {
+  background-color: var(--meter-clip-on);
+  box-shadow: 0 0 10px rgba(255, 23, 68, 0.9);
+  border-color: #ff5252;
+}
+
+/* Meter Bar & dB Scale Container */
+.meter-bar-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 140px;
+  position: relative;
+}
+
+.meter-canvas {
+  width: 22px;
+  height: 140px;
+  background-color: #0b0d13;
+  border: 1px solid #1e2433;
+  border-radius: 2px;
+  display: block;
+}
+
+/* dB Scale Tick Marks */
+.meter-scale {
+  position: relative;
+  width: 16px;
+  height: 140px;
+  font-size: 7.5px;
+  font-family: monospace;
+  color: #616e84;
+  line-height: 1;
+  padding-left: 1px;
+  user-select: none;
+}
+
+/* Labels are placed by app.js on the same curve the meter uses. */
+.meter-scale span {
+  position: absolute;
+  left: 1px;
+  transform: translateY(50%);
+}
+
+/* Numeric dB Readout */
+.numeric-readout {
+  margin-top: 5px;
+  font-size: 9.5px;
+  font-family: monospace;
+  font-weight: 700;
+  color: #728096;
+  text-align: center;
+  width: 100%;
+  letter-spacing: -0.3px;
+  height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numeric-readout.active {
+  color: var(--text-main);
+}
+
+.numeric-readout.clip {
+  color: var(--meter-clip-on);
+  font-weight: 800;
+}
+
+.numeric-readout.mute {
+  color: var(--text-dim);
+}
+
+/* No Channels Notice */
+.no-channels-notice {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Bottom Stats Bar */
+.bottom-stats-bar {
+  background-color: #0c0e13;
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 100;
+}
+
+.stat-item strong {
+  color: var(--text-main);
+  margin-left: 3px;
+}
+
+.stat-right {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+/* Responsiveness */
+@media (max-width: 1400px) {
+  .meters-grid-16 {
+    gap: 4px;
+  }
+  .meter-canvas {
+    width: 17px;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* On constrained tablet/mobile viewports, enable smooth horizontal scroll so 16-row bridge integrity is preserved */
+  .device-body {
+    overflow-x: auto;
+  }
+  .meters-grid-16 {
+    min-width: 1040px;
+  }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* State additions                                                     */
+/* ------------------------------------------------------------------ */
+
+[hidden] {
+  display: none !important;
+}
+
+.sync-legend-sep {
+  opacity: 0.4;
+}
+
+.stat-right a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.stat-right a:hover {
+  text-decoration: underline;
+}
+
+/* Device dropped off the network: keep it visible (dimmed) until it returns
+   or Refresh is pressed, so an outage is obvious. */
+.device-card.offline {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+}
+
+.device-badge.offline {
+  color: #ff5252;
+  background: rgba(255, 23, 68, 0.12);
+  border: 1px solid rgba(255, 23, 68, 0.45);
+}
+
+button.rx-source-box {
+  font: inherit;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.rx-source-box.connected:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 1px;
+}
+
+/* Subscribed, but audio isn't flowing (unresolved / failed). */
+.rx-source-box.unresolved {
+  background: rgba(139, 149, 165, 0.08);
+  border: 1px dashed #5c6677;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.rx-source-box.unresolved .rx-source-dev,
+.rx-source-box.unresolved .rx-source-chan {
+  color: var(--text-muted);
+}
+
+/* No level data from this device for this channel. */
+.meter-strip.no-data .meter-canvas {
+  opacity: 0.45;
+}
+
+/* Level inferred from the other end of a Dante subscription. */
+.meter-strip.mirrored .numeric-readout {
+  font-style: italic;
+}
+
+.meter-strip.mirrored .numeric-readout::after {
+  content: ' ⇄';
+  color: var(--text-dim);
+  font-style: normal;
+}
+
+.meters-grid-16.compact {
+  max-width: calc(var(--compact-count, 8) * 125px);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.meter-strip > .strip-header,
+.meter-strip > .rx-source-box,
+.meter-strip > .clip-led,
+.meter-strip > .numeric-readout {
+  flex-shrink: 0;
+}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Dante Audio Meter Bridge</title>
+  <meta name="theme-color" content="#0e1014">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navigation & Control Header -->
+  <header class="top-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <svg viewBox="0 0 28 28" width="26" height="26" fill="none">
+          <circle cx="14" cy="14" r="13" stroke="#e53935" stroke-width="2"/>
+          <path d="M7 14 L12 8 L16 20 L21 14" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand-titles">
+        <h1>DANTE AUDIO METER BRIDGE</h1>
+        <div class="network-status-line">
+          <span class="status-dot live" id="statusDot"></span>
+          <span class="status-text" id="statusText">Connecting…</span>
+          <div class="nic-select-wrap">
+            <label for="nicSelect">NIC:</label>
+            <select id="nicSelect" class="nic-select" title="Select Network Interface Card (NIC) for Dante discovery and metering">
+              <option value="">Detecting…</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Direction Tabs: TRANSMITTER / RECEIVER -->
+    <nav class="direction-tabs" role="tablist">
+      <button class="tab-btn active" id="tabTx" data-direction="tx" role="tab" aria-selected="true">
+        <span class="tab-icon">▲</span>
+        <span class="tab-label">TRANSMITTER</span>
+        <span class="tab-sub">Outputs / Tx</span>
+      </button>
+      <button class="tab-btn" id="tabRx" data-direction="rx" role="tab" aria-selected="false">
+        <span class="tab-icon">▼</span>
+        <span class="tab-label">RECEIVER</span>
+        <span class="tab-sub">Inputs / Rx</span>
+      </button>
+    </nav>
+
+  </header>
+
+  <!-- Workspace Sub-Toolbar with Collapse Option on the LEFT -->
+  <div class="workspace-toolbar">
+    <div class="workspace-toolbar-left">
+      <button class="btn btn-collapse-toggle" id="btnToggleAll" title="Expand or collapse all device modules">
+        <svg class="toolbar-chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+        </svg>
+        <span id="toggleAllText">Expand All Modules</span>
+      </button>
+      <div class="workspace-stats-pill">
+        <span id="modulesSummary">Modules: <strong>0 Online</strong></span>
+      </div>
+      <div class="sync-legend" title="Network Sync: [Left] Primary | [Right] Secondary. Green = Locked/Good, Red = Error, Hollow = Unsupported/None. Green Module Outline = Clock Leader.">
+        <span class="sync-legend-item"><span class="sync-legend-dot green"></span> Primary</span>
+        <span class="sync-legend-sep">|</span>
+        <span class="sync-legend-item"><span class="sync-legend-dot green"></span> / <span class="sync-legend-dot none"></span> Secondary</span>
+      </div>
+    </div>
+    <div class="workspace-toolbar-right">
+      <div class="search-box">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+        </svg>
+        <input type="text" id="searchInput" placeholder="Filter devices or channels..." autocomplete="off">
+      </div>
+      <button class="btn btn-secondary" id="btnRefresh" title="Refresh network discovery and remove offline devices">
+        <span class="btn-icon">↻</span> Refresh Devices
+      </button>
+      <button class="btn btn-secondary" id="btnResetPeaks" title="Clear all latching peak holds and clip indicators">
+        <span class="btn-icon">↺</span> Reset Peaks
+      </button>
+      <button class="btn btn-icon-only" id="btnFullscreen" title="Toggle Fullscreen">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Viewport: Collapsible Dante Devices -->
+  <main class="main-container" id="devicesContainer">
+    <!-- Dynamic Device Accordion Cards Injected Here -->
+    <div class="empty-state" id="emptyState">
+      <div class="spinner"></div>
+      <p id="emptyStateText">Discovering Dante devices on the network…</p>
+      <span class="subtext">Check that the selected NIC is on your Dante network.</span>
+    </div>
+  </main>
+
+  <!-- Bottom Quick Stats Bar -->
+  <footer class="bottom-stats-bar">
+    <div class="stat-item">Devices: <strong id="statDeviceCount">0</strong></div>
+    <div class="stat-item">Active Tab: <strong id="statActiveTab">TRANSMITTER</strong></div>
+    <div class="stat-item">Total Channels: <strong id="statChannelCount">0</strong></div>
+    <div class="stat-item">Active Clips: <strong id="statClipCount">0</strong></div>
+    <div class="stat-right"><a href="https://github.com/mbsound/Dante-Meter-Bridge" target="_blank" rel="noopener">Dante Meter Bridge</a> <strong id="appVersion"></strong></div>
+  </footer>
+
+  <script src="levels.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

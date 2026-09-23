@@ -1,0 +1,48 @@
+{
+  "name": "dante-meter-bridge",
+  "version": "2.0.0",
+  "description": "Real-time audio meter bridge for Audinate Dante networks — a zero-dependency Node.js server with a browser UI.",
+  "main": "server.js",
+  "bin": {
+    "dante-meter-bridge": "server.js"
+  },
+  "engines": {
+    "node": ">=18.3"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/"
+  },
+  "files": [
+    "server.js",
+    "lib/",
+    "public/",
+    "scripts/",
+    "dante-meter.config.example.json",
+    "*.command",
+    "*.bat",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbsound/Dante-Meter-Bridge.git"
+  },
+  "keywords": [
+    "dante",
+    "audinate",
+    "metering",
+    "audio",
+    "meterbridge",
+    "broadcast",
+    "pro-audio"
+  ],
+  "author": "Matt Bell (mbsound)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mbsound/Dante-Meter-Bridge/issues"
+  },
+  "homepage": "https://github.com/mbsound/Dante-Meter-Bridge#readme"
+}
