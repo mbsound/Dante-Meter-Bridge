@@ -1044,16 +1044,6 @@ body {
   }
 }
 
-@media (max-width: 1100px) {
-  /* On constrained tablet/mobile viewports, enable smooth horizontal scroll so 16-row bridge integrity is preserved */
-  .device-body {
-    overflow-x: auto;
-  }
-  .meters-grid-16 {
-    min-width: 1040px;
-  }
-}
-
 
 /* ------------------------------------------------------------------ */
 /* State additions                                                     */
@@ -1131,7 +1121,64 @@ button.rx-source-box {
 }
 
 .meters-grid-16.compact {
+  grid-template-columns: repeat(var(--compact-count, 8), minmax(70px, 120px));
   max-width: calc(var(--compact-count, 8) * 125px);
+}
+
+/* Narrower screens: wrap the 16 strips into rows (8, then 4 per row) instead
+   of scrolling sideways, and let the device header wrap onto two lines. */
+@media (max-width: 1100px) {
+  .meters-grid-16 {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+  .meters-grid-16.compact {
+    grid-template-columns: repeat(var(--compact-count, 8), minmax(0, 120px));
+  }
+}
+
+@media (max-width: 600px) {
+  .meters-grid-16 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .meters-grid-16.compact {
+    grid-template-columns: repeat(var(--compact-count-narrow, 4), minmax(0, 120px));
+  }
+}
+
+@media (max-width: 900px) {
+  .device-header,
+  .device-card.collapsed {
+    height: auto;
+  }
+  .device-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 8px 12px;
+  }
+  .device-header-left {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    min-width: 0;
+  }
+  .device-name {
+    overflow-wrap: anywhere;
+  }
+  .device-header-right {
+    flex-shrink: 1;
+    min-width: 0;
+    margin-left: auto;
+  }
+  .device-identity-container {
+    min-width: 0;
+  }
+  .device-id-primary,
+  .device-id-versions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .device-id-primary {
+    white-space: normal;
+  }
 }
 
 .btn:disabled {
@@ -1453,4 +1500,190 @@ body.view-log #devicesContainer {
   color: #ffcc80;
   font-size: 12.5px;
   font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Custom tab                                                          */
+/* ------------------------------------------------------------------ */
+
+/* Count of channels in the Custom view (blue, unlike the red error badge). */
+.tab-badge.tab-count {
+  background-color: var(--accent-blue);
+}
+
+/* Strip already in the Custom view: small diamond in the corner. */
+.meter-strip.in-custom::after {
+  content: '◆';
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--accent-blue);
+  pointer-events: none;
+}
+
+/* Strips picked with Cmd/Ctrl-click, Shift-click or right-click. */
+.meter-strip.selected {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.55), inset 0 0 0 1px rgba(33, 150, 243, 0.35);
+  background-color: rgba(33, 150, 243, 0.08);
+}
+
+.meter-strip {
+  -webkit-touch-callout: none; /* long-press opens our menu, not the system one */
+}
+
+.custom-card .device-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-card.collapsed .device-body {
+  display: none;
+}
+
+.custom-card.missing .device-ip-badge {
+  color: #ff8a80;
+}
+
+.custom-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin: 0 0 6px 2px;
+}
+
+.custom-group-tx .custom-group-label {
+  color: #ef9a9a;
+}
+
+.custom-group-rx .custom-group-label {
+  color: #90caf9;
+}
+
+.card-action {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.card-action:hover,
+.card-action:focus-visible {
+  color: #ff8a80;
+  border-color: #ff8a80;
+}
+
+.custom-empty-icon {
+  font-size: 30px;
+  color: var(--accent-blue);
+  margin-bottom: 8px;
+}
+
+.custom-empty .subtext {
+  max-width: 560px;
+  line-height: 1.6;
+}
+
+/* Right-click / long-press menu on a meter strip */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: 5px;
+  background-color: #1a1e29;
+  border: 1px solid var(--border-active);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu-title {
+  padding: 6px 10px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.context-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  text-align: left;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item:hover:not(:disabled),
+.context-menu-item:focus-visible {
+  background-color: var(--accent-blue);
+  color: #ffffff;
+  outline: none;
+}
+
+.context-menu-item.danger:hover:not(:disabled),
+.context-menu-item.danger:focus-visible {
+  background-color: var(--accent-red);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.context-menu-sep {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 4px 2px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 46px;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 9px 14px;
+  background-color: #1a1e29;
+  border: 1px solid var(--border-active);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.toast-action {
+  background: transparent;
+  border: none;
+  color: #90caf9;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
 }

@@ -278,3 +278,14 @@ test('event log: persistence, reload, query, retention and CSV', async (t) => {
   assert.match(csv, /^Time,Severity,Category,Event,Device,IP,Message\r\n/);
   assert.match(csv, /"Mic, ""A"""/);
 });
+
+test('Rx channels reported for the first time are not logged as routing changes', () => {
+  const dev = device({ rx: [{ number: 1, name: 'In 1' }] }); // placeholder: no status yet
+  const h = harness([dev]);
+  h.tick();
+  dev.rx = [{ number: 1, name: 'In 1', subscribedDevice: 'Desk', subscribedChannel: 'Out 1', status: 9 }];
+  assert.deepEqual(types(h.tick()), []);
+  // A real change after that is still logged
+  dev.rx = [{ number: 1, name: 'In 1', subscribedDevice: 'Desk', subscribedChannel: 'Out 2', status: 9 }];
+  assert.deepEqual(types(h.tick()), ['routing_changed']);
+});

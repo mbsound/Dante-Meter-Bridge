@@ -250,15 +250,15 @@ function mdnsRecord(name, type, rdata) {
 }
 
 /** A Dante ARC advertisement for `name`, with or without an address record. */
-function advert(name, { port = 4440, address = null, model = 'SB16' } = {}) {
+function advert(name, { port = 4440, address = null, model = 'SB16', txt = null } = {}) {
   const instance = `${name}._netaudio-arc._udp.local`;
   const host = `${name.toLowerCase()}.local`;
   const srv = Buffer.concat([Buffer.from([0, 0, 0, 0, port >> 8, port & 0xff]), mdnsLib.encodeName(host)]);
-  const txtEntry = Buffer.from(`model=${model}`);
+  const txtData = Buffer.concat((txt || [`model=${model}`]).map((e) => Buffer.concat([Buffer.from([Buffer.byteLength(e)]), Buffer.from(e)])));
   const records = [
     mdnsRecord('_netaudio-arc._udp.local', mdnsLib.TYPE.PTR, mdnsLib.encodeName(instance)),
     mdnsRecord(instance, mdnsLib.TYPE.SRV, srv),
-    mdnsRecord(instance, mdnsLib.TYPE.TXT, Buffer.concat([Buffer.from([txtEntry.length]), txtEntry]))
+    mdnsRecord(instance, mdnsLib.TYPE.TXT, txtData)
   ];
   if (address) records.push(mdnsRecord(host, mdnsLib.TYPE.A, Buffer.from(address.split('.').map(Number))));
   const header = Buffer.alloc(12);
@@ -317,18 +317,18 @@ test("a device's own name wins over mDNS, and a name can't be claimed twice", ()
 // Devices that only answer some ARC protocol IDs / ports (e.g. DVS)
 // ---------------------------------------------------------------------------
 
-test('until a device answers, polls cycle ARC protocol 0x2729/0x27FF and ports 4440/4455', () => {
+test('until a device answers, polls cycle ARC protocol 0x2729/0x27FF/0x2809 and ports 4440/4455', () => {
   const engine = makeEngine();
   const dev = engine.register('169.254.1.50');
   engine.sent = [];
   const targets = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     engine.sent = [];
     engine.pollDevice('169.254.1.50');
     const arc = engine.sent.find((s) => s.sock === 'ARC');
     targets.push(`${arc.buf.readUInt16BE(0).toString(16)}@${arc.port}`);
   }
-  assert.deepEqual(new Set(targets), new Set(['2729@4440', '27ff@4440', '2729@4455', '27ff@4455']));
+  assert.deepEqual(new Set(targets), new Set(['2729@4440', '27ff@4440', '2809@4440', '2729@4455', '27ff@4455', '2809@4455']));
 
   // It answers on 4455 with 0x27FF: from then on, only that is used.
   const reply = nameReply('DVS-PC');
@@ -369,4 +369,251 @@ test('health: devices answering but no heartbeats is reported as blocked multica
   assert.equal(engine.getHealth(now + 25000).multicastBlocked, true);
   engine.stats.lastHeartbeatAt = now + 24000;
   assert.equal(engine.getHealth(now + 25000).multicastBlocked, false);
+});
+
+// ---------------------------------------------------------------------------
+// Modern ARC devices (e.g. Dante Virtual Soundcard 4.x, arcp_vers=2.8.9)
+// ---------------------------------------------------------------------------
+
+/** Build a 0x2400 / 0x3400 page the way a modern device lays it out. */
+function statusPage({ rx = false, result = 1, channels }) {
+  const recSize = rx ? 56 : 40;
+  const table = 18 + channels.length * 2;
+  const recordsAt = table;
+  const fmtAt = recordsAt + channels.length * recSize;
+  const parts = [];
+  let strAt = fmtAt + 16;
+  const strings = [];
+  const str = (v) => {
+    if (!v) return 0;
+    const at = strAt;
+    strings.push(Buffer.from(v + '\0'));
+    strAt += v.length + 1;
+    return at;
+  };
+  const head = Buffer.alloc(table);
+  head.writeUInt16BE(0x2809, 0);
+  head.writeUInt16BE(rx ? 0x3400 : 0x2400, 6);
+  head.writeUInt16BE(result, 8);
+  head[16] = 32;
+  head[17] = channels.length;
+  channels.forEach((ch, i) => {
+    const rec = Buffer.alloc(recSize);
+    rec.writeUInt16BE(rx ? 0x141c : 0x1414, 0);
+    rec.writeUInt16BE(ch.number, 2);
+    rec.writeUInt16BE(3, 6);
+    rec.writeUInt16BE(ch.number, 8);
+    rec.writeUInt16BE(str(ch.name), 20);
+    rec.writeUInt16BE(fmtAt, 22);
+    rec.writeUInt16BE(str(`${rx ? 'Rx' : 'Tx'}-${ch.number}`), 30);
+    if (rx) {
+      rec.writeUInt16BE(str(ch.txChannel), 44);
+      rec.writeUInt16BE(str(ch.txDevice), 46);
+      rec.writeUInt16BE(ch.status || 0, 48);
+    }
+    head.writeUInt16BE(recordsAt + i * recSize, 18 + i * 2);
+    parts.push(rec);
+  });
+  const fmt = Buffer.alloc(16);
+  fmt.writeUInt32BE(48000, 0);
+  fmt.writeUInt16BE(0x18, 6);
+  const buf = Buffer.concat([head, ...parts, fmt, ...strings]);
+  buf.writeUInt16BE(buf.length, 2);
+  return buf;
+}
+
+function modernAdvert(name, address, version = '2.8.9') {
+  return advert(name, { address, txt: [`arcp_vers=${version}`, 'mf=Audinate', 'model=DvsMacOs'] });
+}
+
+test('a device advertising arcp_vers 2.8.9 is queried with modern ARC 0x2809 and the paged inventory', () => {
+  const engine = makeEngine();
+  engine.handleMdns(modernAdvert('DVS-Mac', '169.254.1.70'), { address: '169.254.1.70' });
+  const dev = engine.devices.get('169.254.1.70');
+  assert.equal(dev.arcAdvertised, 0x2809);
+
+  engine.sent = [];
+  engine.pollDevice('169.254.1.70');
+  const arc = engine.sent.filter((s) => s.sock === 'ARC');
+  const opcodes = arc.map((s) => `${s.buf.readUInt16BE(0).toString(16)}:${s.buf.readUInt16BE(6).toString(16)}`);
+  assert.ok(opcodes.includes('2809:2400'), opcodes.join(' '));
+  assert.ok(opcodes.includes('2809:3400'));
+  assert.ok(opcodes.includes('27ff:1002'), 'name also asked with the default ID');
+  assert.ok(!opcodes.some((o) => o.endsWith(':2010') || o.endsWith(':3000') || o.endsWith(':1100')), 'no legacy channel queries');
+  // netaudio framing: the length field equals the packet length, no padding
+  for (const s of arc) assert.equal(s.buf.readUInt16BE(2), s.buf.length);
+});
+
+test('modern Tx inventory pages are merged into the channel list', () => {
+  const engine = makeEngine();
+  engine.handleMdns(modernAdvert('DVS-Mac', '169.254.1.70'), { address: '169.254.1.70' });
+  const dev = engine.devices.get('169.254.1.70');
+
+  engine.sent = [];
+  const first = statusPage({ result: 0x8112, channels: [1, 2].map((n) => ({ number: n, name: `Playback ${n}` })) });
+  engine.handleArc(first, { address: '169.254.1.70', port: 4440 });
+  // Asked for the next page, continuing at channel 3
+  const next = engine.sent.find((s) => s.sock === 'ARC' && s.buf.readUInt16BE(6) === 0x2400);
+  assert.ok(next);
+  assert.equal(next.buf.readUInt16BE(8 + 2 + 8), 3, 'media selector = audio');
+  assert.equal(next.buf.readUInt16BE(8 + 2 + 10), 3, 'start channel');
+
+  engine.handleArc(statusPage({ channels: [{ number: 3, name: 'Playback 3' }] }), { address: '169.254.1.70', port: 4440 });
+  assert.equal(dev.tx.count, 3);
+  assert.deepEqual(Object.values(dev.tx.channels).map((c) => c.name), ['Playback 1', 'Playback 2', 'Playback 3']);
+  assert.equal(dev.sampleRate, 48000);
+  assert.equal(dev.arcProtocol, 0x2809);
+});
+
+test('modern Rx inventory carries subscriptions', () => {
+  const engine = makeEngine();
+  engine.handleMdns(modernAdvert('DVS-Mac', '169.254.1.70'), { address: '169.254.1.70' });
+  const dev = engine.devices.get('169.254.1.70');
+  engine.handleArc(
+    statusPage({ rx: true, channels: [{ number: 1, name: 'In 1', txDevice: 'Stagebox-1', txChannel: 'Mic 1', status: 9 }, { number: 2, name: 'In 2' }] }),
+    { address: '169.254.1.70', port: 4440 }
+  );
+  assert.equal(dev.rx.count, 2);
+  assert.equal(dev.rx.channels[1].subscribedDevice, 'Stagebox-1');
+  assert.equal(dev.rx.channels[1].subscribedChannel, 'Mic 1');
+  assert.equal(dev.rx.channels[1].connected, true);
+  assert.equal(dev.rx.channels[2].subscribedDevice, null);
+});
+
+test('a modern device answering a default-ID name query stays modern; ARC errors show in diagnostics', () => {
+  const engine = makeEngine();
+  engine.handleMdns(modernAdvert('DVS-Mac', '169.254.1.70'), { address: '169.254.1.70' });
+  engine.handleArc(statusPage({ channels: [{ number: 1, name: 'A' }] }), { address: '169.254.1.70', port: 4440 });
+  const reply = nameReply('DVS-Mac');
+  reply.writeUInt16BE(0x27ff, 0);
+  engine.handleArc(reply, { address: '169.254.1.70', port: 4440 });
+  const dev = engine.devices.get('169.254.1.70');
+  assert.equal(engine.modernArcProtocol(dev), 0x2809);
+
+  const rejected = Buffer.alloc(10);
+  rejected.writeUInt16BE(0x2809, 0);
+  rejected.writeUInt16BE(10, 2);
+  rejected.writeUInt16BE(0x3400, 6);
+  rejected.writeUInt16BE(0x0022, 8);
+  engine.handleArc(rejected, { address: '169.254.1.70', port: 4440 });
+  const diag = engine.getDiagnostics().devices.find((d) => d.ip === '169.254.1.70');
+  assert.equal(diag.arcAdvertised, '2.8.9 (0x2809)');
+  assert.equal(diag.lastArcError.opcode, '0x3400');
+  assert.equal(diag.lastArcError.result, '0x22');
+  assert.equal(diag.channelInventory, 'modern (0x2400/0x3400)');
+});
+
+test('a device advertising an older protocol that answers a 0x2809 probe stays on the legacy queries', () => {
+  const engine = makeEngine();
+  const dev = engine.register('169.254.1.80');
+  const probe = nameReply('Wall-Plate');
+  probe.writeUInt16BE(0x2809, 0);
+  engine.handleArc(probe, { address: '169.254.1.80', port: 4440 });
+  // Its mDNS then says arcp_vers 2.7.13 (0x27FF)
+  engine.handleMdns(advert('Wall-Plate', { address: '169.254.1.80', txt: ['arcp_vers=2.7.13'] }), { address: '169.254.1.80' });
+  assert.equal(engine.modernArcProtocol(dev), null);
+  engine.sent = [];
+  engine.pollDevice('169.254.1.80');
+  const opcodes = engine.sent.filter((s) => s.sock === 'ARC').map((s) => s.buf.readUInt16BE(6));
+  assert.ok(opcodes.includes(0x3000) && !opcodes.includes(0x3400));
+});
+
+test('without mDNS, a device that rejects the modern inventory falls back to the legacy queries', () => {
+  const engine = makeEngine();
+  const dev = engine.register('169.254.1.81');
+  const probe = nameReply('Wall-Plate');
+  probe.writeUInt16BE(0x2809, 0);
+  engine.handleArc(probe, { address: '169.254.1.81', port: 4440 });
+  assert.equal(engine.modernArcProtocol(dev), 0x2809);
+  const rejected = Buffer.alloc(10);
+  rejected.writeUInt16BE(0x2809, 0);
+  rejected.writeUInt16BE(10, 2);
+  rejected.writeUInt16BE(0x2400, 6);
+  rejected.writeUInt16BE(0x0030, 8);
+  engine.handleArc(rejected, { address: '169.254.1.81', port: 4440 });
+  assert.equal(engine.modernArcProtocol(dev), null);
+  for (let i = 0; i < 6; i++) {
+    engine.sent = [];
+    engine.pollDevice('169.254.1.81');
+    const ids = engine.sent.filter((s) => s.sock === 'ARC').map((s) => s.buf.readUInt16BE(0));
+    assert.ok(!ids.includes(0x2809), 'stops probing 0x2809');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Losing and regaining the Dante interface
+// ---------------------------------------------------------------------------
+
+function nicHarness(initial) {
+  const network = require('../lib/dante/network');
+  const original = network.listInterfaces;
+  let current = initial;
+  network.listInterfaces = () => current;
+  const engine = makeEngine();
+  const bound = [];
+  engine.bind = (iface) => {
+    engine.iface = iface;
+    bound.push(iface && iface.name);
+  };
+  const events = [];
+  for (const e of ['interface-lost', 'interface-restored', 'interfaces-changed']) engine.on(e, () => events.push(e));
+  engine.sendMdnsQueries = () => {};
+  engine.probeArpTable = async () => {};
+  return {
+    engine,
+    bound,
+    events,
+    set: (list) => (current = list),
+    restore: () => (network.listInterfaces = original)
+  };
+}
+
+const nic = (name, address) => ({ name, address, netmask: '255.255.0.0', mac: '', isDanteLinkLocal: address.startsWith('169.254.') });
+const office = nic('en5', '10.0.0.5');
+
+test('when the Dante NIC drops and comes back (even with a new address) the bridge switches back to it', () => {
+  const h = nicHarness([office, nic('en7', '169.254.1.44')]);
+  try {
+    h.engine.autoSelected = true;
+    h.engine.iface = nic('en7', '169.254.1.44');
+    h.set([office]); // cable pulled
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5']);
+    h.engine.discoveryTick(); // still gone: stays put
+    assert.deepEqual(h.bound, ['en5']);
+    h.set([office, nic('en7', '169.254.10.20')]); // macOS self-assigns a new link-local address
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5', 'en7']);
+    assert.equal(h.engine.iface.address, '169.254.10.20');
+    assert.ok(h.events.includes('interface-lost') && h.events.includes('interface-restored'));
+  } finally {
+    h.restore();
+  }
+});
+
+test('an interface chosen in the UI is kept even when a Dante interface appears', () => {
+  const h = nicHarness([office]);
+  try {
+    h.engine.selectInterface('10.0.0.5');
+    h.engine.discoveryTick();
+    h.set([office, nic('en7', '169.254.1.1')]);
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5'], 'no automatic switch');
+    assert.ok(h.events.includes('interfaces-changed'), 'NIC menu refreshed');
+  } finally {
+    h.restore();
+  }
+});
+
+test('auto-selected non-Dante interface switches to a link-local one that appears later', () => {
+  const h = nicHarness([office]);
+  try {
+    h.engine.autoSelected = true;
+    h.engine.iface = office;
+    h.set([office, nic('en7', '169.254.1.1')]);
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en7']);
+  } finally {
+    h.restore();
+  }
 });

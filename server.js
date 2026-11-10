@@ -14,6 +14,7 @@ const { listInterfaces, openBrowser } = require('./lib/dante/network');
 const { createWebServer } = require('./lib/web/server');
 const { EventLog } = require('./lib/events/event-log');
 const { NetworkMonitor } = require('./lib/events/monitor');
+const { CustomLayout } = require('./lib/custom-layout');
 const { version } = require('./package.json');
 
 function main() {
@@ -53,8 +54,10 @@ function main() {
   });
   const monitor = new NetworkMonitor({ engine, eventLog });
   engine.on('interface-lost', (address) => monitor.interfaceLost(address));
+  engine.on('interface-restored', (iface) => monitor.interfaceRestored(iface));
 
-  const web = createWebServer({ engine, eventLog, version, log });
+  const customLayout = new CustomLayout({ file: config.customLayoutFile, log }).load();
+  const web = createWebServer({ engine, eventLog, customLayout, version, log });
   const localUrl = `http://localhost:${config.port}`;
 
   web.server.on('error', (err) => {

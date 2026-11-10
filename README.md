@@ -45,9 +45,20 @@ Check any combination of filter buttons to show only those events. Here, **Devic
 - **Device health:** primary / secondary network sync indicators, secondary-network IP, clock leader (PTP grandmaster) highlight, and sample rate, all read from the devices. If a device doesn't report something (for example its clock status), the indicator says so instead of assuming it's fine.
 - **Offline detection:** a device that goes silent for 7 seconds stays on screen, dimmed and marked **OFFLINE**, for up to a minute (or until you press **Refresh Devices**) so a dropout is easy to spot.
 - **Device identity:** manufacturer, model and versions from Dante Controller's local database when it's installed, plus optional overrides you define yourself.
+- **Custom tab:** build your own view of just the channels you care about, Tx and Rx from any devices, grouped by device (see below).
 - **Event Log tab:** a running record of what happens on the network (see below).
 - **Search** by device name, IP, model or channel name. Collapse / expand state is remembered per device.
 - **NIC switching** from the header without restarting.
+
+---
+
+## Custom tab
+
+The **Custom** tab shows only the channels you pick, from any number of devices, with a device's Tx and Rx channels grouped together in one card.
+
+- **Add channels:** in the Transmitter or Receiver tab, right-click a meter (long-press on a touch screen) and choose **Add to Custom**. To add several at once, click one meter, then Cmd/Ctrl-click others or Shift-click to select a range, and right-click. **Add all Tx/Rx channels of …** adds a whole device. Channels already in the Custom view are marked with ◆.
+- **Remove channels:** right-click a meter in the Custom tab and choose **Remove from Custom**, or remove a whole device with its ✕ button. **Clear Custom** empties the view. **Show in Transmitter/Receiver tab** jumps to the channel in its normal tab.
+- **Saved on the bridge:** the layout is stored in `custom-layout.json` next to the app (git-ignored; change the location with `customLayoutFile` in the config file or `DANTE_CUSTOM_LAYOUT`). Every screen viewing the bridge sees the same layout and changes appear on all of them immediately. Devices are remembered by name, so the layout survives IP address changes; a device that isn't on the network is shown dimmed until it returns.
 
 ---
 
@@ -65,7 +76,7 @@ The **Event Log** tab records network events as they happen, with time, severity
 | Network | Subnet mismatch / conflict, secondary link down / up, late packets |
 | Timeouts | A device that is still on the network but stops answering queries, and its recovery |
 | Configuration | Device renamed, sample rate changed |
-| System | Monitoring started, network interface lost |
+| System | Monitoring started, network interface lost / restored |
 
 **Filtering:** click any number of filter buttons to show only those kinds of events; everything not checked is hidden. The severity buttons (Error / Warning / Info) and the search box narrow the list further. With nothing selected, everything is shown. Filters are remembered per browser.
 
@@ -170,6 +181,7 @@ Receivers without their own meters show the level of the transmitter channel the
 | `GET /api/events.csv` | The same, as CSV |
 | `GET /api/diagnostics` | Per-device ports, protocol, packet counters and multicast health, for troubleshooting |
 | `POST /api/events/clear` | Clear the in-memory event list (files are kept) |
+| `GET /api/custom-layout` | The Custom tab layout: `{"devices": [{"name", "tx": [channel numbers], "rx": [...]}]}` |
 
 ---
 

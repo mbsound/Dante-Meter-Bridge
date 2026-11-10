@@ -47,6 +47,12 @@
         <span class="tab-label">RECEIVER</span>
         <span class="tab-sub">Inputs / Rx</span>
       </button>
+      <button class="tab-btn" id="tabCustom" role="tab" aria-selected="false" title="Your hand-picked Tx and Rx channels. Right-click (or long-press) any meter to add it.">
+        <span class="tab-icon">◆</span>
+        <span class="tab-label">CUSTOM</span>
+        <span class="tab-sub">Your channels</span>
+        <span class="tab-badge tab-count" id="tabCustomCount" hidden>0</span>
+      </button>
       <button class="tab-btn" id="tabLog" role="tab" aria-selected="false">
         <span class="tab-icon">≡</span>
         <span class="tab-label">EVENT LOG</span>
@@ -84,6 +90,9 @@
         </svg>
         <input type="text" id="searchInput" placeholder="Filter devices or channels..." autocomplete="off">
       </div>
+      <button class="btn btn-secondary" id="btnClearCustom" hidden title="Remove every channel from the Custom tab">
+        Clear Custom
+      </button>
       <button class="btn btn-secondary" id="btnRefresh" title="Refresh network discovery and remove offline devices">
         <span class="btn-icon">↻</span> Refresh Devices
       </button>
@@ -107,6 +116,20 @@
       <span class="subtext">Check that the selected NIC is on your Dante network.</span>
     </div>
   </main>
+
+  <!-- Custom tab: hand-picked channels grouped by device -->
+  <main class="main-container" id="customContainer" hidden>
+    <div class="empty-state custom-empty" id="customEmpty">
+      <div class="custom-empty-icon">◆</div>
+      <p id="customEmptyText">No channels in your Custom view yet.</p>
+      <span class="subtext">In the Transmitter or Receiver tab, right-click a meter (long-press on a touch screen) and choose <strong>Add to Custom</strong>.<br>
+        Cmd/Ctrl-click or Shift-click meters first to add several at once. Tx and Rx channels from the same device are grouped together.</span>
+    </div>
+  </main>
+
+  <!-- Channel context menu (right-click / long-press on a meter) -->
+  <div class="context-menu" id="channelMenu" role="menu" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Event Log -->
   <section class="event-log" id="eventLogView" hidden aria-label="Event log">

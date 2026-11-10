@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0
+
+### Custom tab
+- New **Custom** tab showing only the channels you pick, from any devices, with each device's Tx and Rx channels grouped in one card.
+- Right-click a meter (long-press on touch screens) for **Add to Custom** / **Remove from Custom**, **Add all Tx/Rx channels of a device** and **Show in Transmitter/Receiver tab**. Click, Cmd/Ctrl-click and Shift-click select several meters at once, across devices. Channels in the Custom view are marked with ◆ in the normal tabs.
+- The layout is saved on the bridge (`custom-layout.json`, git-ignored) and shared live with every screen viewing it. Devices are remembered by name, so it survives IP changes. `GET /api/custom-layout` returns it.
+
+
+### Fixes
+- **Dante Virtual Soundcard (4.x) still showed no Tx channels.** Newer Dante software advertises a modern control protocol in mDNS (`arcp_vers`, e.g. 2.8.9 → ARC protocol 0x2809) and does not answer the older channel queries. The bridge now reads `arcp_vers` and, for modern devices, lists Tx and Rx channels (with subscriptions and sample rate) through the paged channel-status inventory, using netaudio's exact packet framing. Verified on a 19-device network: Dante Virtual Soundcard (0x2809), Yamaha Rio3224 (0x280C), Prodigy (0x280F) and others now use it; older devices are queried as before. A device that answers a 0x2809 probe but rejects the modern inventory falls back to the older queries.
+- **Rx subscriptions were missing on many devices.** The Rx channel query sent the page's channel count where devices expect the constant 0x0001, so they rejected it (result 0x22) and their Rx channels never showed sources. It now matches netaudio byte-for-byte; verified on Yamaha and Audinate-module devices.
+- Rx channels reported for the first time are no longer logged as "Routing changed" at startup.
+- **The bridge stayed on the wrong network after the Dante cable was pulled.** When the Dante interface disappeared, the bridge moved to another interface and never came back. It now switches back as soon as that adapter has an address again, even if the new link-local address is different. If it had picked a non-Dante interface automatically, it also switches to a Dante (169.254.x.x) interface that appears later. An interface you chose in the NIC menu is never changed automatically. The NIC menu now updates when adapters gain or lose addresses, and the Event Log records "Network interface restored".
+
+### Added
+- `/api/diagnostics` shows each device's advertised `arcp_vers`, which channel inventory it uses, and the last ARC error code the device returned.
+
 ## 2.1.1
 
 ### Fixes

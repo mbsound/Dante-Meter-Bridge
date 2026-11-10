@@ -24,14 +24,15 @@ test('ARC queries match the original encoding', () => {
     hex(packets.arcCommand(5, ARC_COMMANDS.TX_FRIENDLY_NAMES, packets.txNamesArgs(1))),
     '27290010000520100000000100210000'
   );
-  // 20 Rx channels -> a full page of 16 then a page of 4.
+  // 20 Rx channels -> pages starting at channel 1 and 17 (netaudio's layout:
+  // 0000 0001 <start> 0000; verified against Yamaha and Audinate hardware).
   assert.equal(
     hex(packets.arcCommand(6, ARC_COMMANDS.RX_CHANNELS, packets.rxChannelsArgs(0, 20))),
-    '27290010000630000000001000010000'
+    '27290010000630000000000100010000'
   );
   assert.equal(
     hex(packets.arcCommand(7, ARC_COMMANDS.RX_CHANNELS, packets.rxChannelsArgs(1, 20))),
-    '27290010000730000000000400110000'
+    '27290010000730000000000100110000'
   );
 });
 
@@ -115,7 +116,7 @@ test('parses channel counts and device name', () => {
   const counts = arcReply(ARC_COMMANDS.CHANNEL_COUNTS, 16);
   counts[13] = 32;
   counts[15] = 8;
-  assert.deepEqual(packets.parseArcReply(counts), { protocolId: 0x2729, commandId: ARC_COMMANDS.CHANNEL_COUNTS, txCount: 32, rxCount: 8 });
+  assert.deepEqual(packets.parseArcReply(counts), { protocolId: 0x2729, resultCode: 0, commandId: ARC_COMMANDS.CHANNEL_COUNTS, txCount: 32, rxCount: 8 });
 
   const name = Buffer.concat([arcReply(ARC_COMMANDS.DEVICE_NAME, 10), Buffer.from('Stagebox-1\0')]);
   assert.equal(packets.parseArcReply(name).name, 'Stagebox-1');
@@ -313,4 +314,28 @@ test('clock refresh is a pure clock-control query (revision 0x0734, no change fl
   assert.equal(record.readUInt16BE(2), 0x0021);
   assert.equal(record.readUInt32BE(4), 100);
   assert.ok(record.subarray(8).every((b) => b === 0), 'all change flags and values zero');
+});
+
+test('arcp_vers maps to an ARC protocol ID the way netaudio does', () => {
+  assert.equal(packets.arcProtocolFromVersion('2.8.9'), 0x2809);
+  assert.equal(packets.arcProtocolFromVersion('2.8.0'), 0x27ff);
+  assert.equal(packets.arcProtocolFromVersion('2.7.41'), 0x2729);
+  assert.equal(packets.arcProtocolFromVersion('2.8.15'), 0x280f);
+  assert.equal(packets.arcProtocolFromVersion('3.0'), 0x280f);
+  assert.equal(packets.arcProtocolFromVersion('1.0'), 0x27ff);
+  assert.equal(packets.arcProtocolFromVersion('junk'), null);
+  assert.equal(packets.isModernArc(0x2809), true);
+  assert.equal(packets.isModernArc(0x27ff), false);
+});
+
+test('modern ARC requests use netaudio framing', () => {
+  assert.equal(hex(packets.arcRequest(1, ARC_COMMANDS.DEVICE_NAME, undefined, 0x27ff)), '27ff000a000110020000');
+  assert.equal(
+    hex(packets.channelStatusQuery(2, { protocolId: 0x2809 })),
+    '28090022000224000000' + '000000000000' + '0001' + '0001' + '0001' + '0000' + '00000000' + '830283060310'
+  );
+  // 0x280F has no trailer; Rx uses 0x3400
+  const rx = packets.channelStatusQuery(3, { protocolId: 0x280f, rx: true, mediaSelector: 3, start: 9 });
+  assert.equal(rx.readUInt16BE(6), 0x3400);
+  assert.equal(hex(rx.subarray(28)), '000000000000');
 });
