@@ -35,6 +35,7 @@
 
   const state = {
     direction: 'tx',
+    view: 'meters', // 'meters' | 'log'
     devices: new Map(), // ip -> device structure
     meters: {}, // ip -> { tx, rx, mirrored }
     collapsed: loadCollapsed(), // device name -> bool
@@ -54,6 +55,7 @@
     nicSelect: $('nicSelect'),
     tabTx: $('tabTx'),
     tabRx: $('tabRx'),
+    tabLog: $('tabLog'),
     search: $('searchInput'),
     toggleAll: $('btnToggleAll'),
     toggleAllText: $('toggleAllText'),
@@ -201,6 +203,11 @@
       case 'meters':
         state.meters = msg.d || {};
         break;
+      case 'events':
+      case 'event':
+      case 'events_cleared':
+        window.DanteEventLog.receive(msg);
+        break;
     }
   }
 
@@ -237,16 +244,32 @@
 
   els.tabTx.addEventListener('click', () => setDirection('tx'));
   els.tabRx.addEventListener('click', () => setDirection('rx'));
+  els.tabLog.addEventListener('click', () => setView('log'));
+
+  function updateTabs() {
+    const active = state.view === 'log' ? 'log' : state.direction;
+    for (const [tab, id] of [[els.tabTx, 'tx'], [els.tabRx, 'rx'], [els.tabLog, 'log']]) {
+      tab.classList.toggle('active', active === id);
+      tab.setAttribute('aria-selected', String(active === id));
+    }
+    els.statTab.textContent = { tx: 'TRANSMITTER', rx: 'RECEIVER', log: 'EVENT LOG' }[active];
+  }
+
+  function setView(view) {
+    if (state.view === view) return;
+    state.view = view;
+    document.body.classList.toggle('view-log', view === 'log');
+    window.DanteEventLog.setVisible(view === 'log');
+    updateTabs();
+    if (view === 'meters') renderDevices();
+  }
 
   function setDirection(dir) {
-    if (state.direction === dir) return;
+    const changed = state.direction !== dir;
     state.direction = dir;
-    els.tabTx.classList.toggle('active', dir === 'tx');
-    els.tabTx.setAttribute('aria-selected', String(dir === 'tx'));
-    els.tabRx.classList.toggle('active', dir === 'rx');
-    els.tabRx.setAttribute('aria-selected', String(dir === 'rx'));
-    els.statTab.textContent = dir === 'tx' ? 'TRANSMITTER' : 'RECEIVER';
-    renderDevices();
+    if (state.view !== 'meters') setView('meters');
+    else if (changed) renderDevices();
+    updateTabs();
   }
 
   els.search.addEventListener('input', () => {
@@ -798,7 +821,7 @@
 
   function frame() {
     try {
-      renderMeters();
+      if (state.view === 'meters') renderMeters();
     } catch (err) {
       console.error('[meters]', err);
     }

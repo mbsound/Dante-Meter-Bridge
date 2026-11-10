@@ -12,6 +12,8 @@ const { DanteEngine } = require('./lib/dante/engine');
 const { IdentityResolver } = require('./lib/dante/identity');
 const { listInterfaces, openBrowser } = require('./lib/dante/network');
 const { createWebServer } = require('./lib/web/server');
+const { EventLog } = require('./lib/events/event-log');
+const { NetworkMonitor } = require('./lib/events/monitor');
 const { version } = require('./package.json');
 
 function main() {
@@ -40,7 +42,19 @@ function main() {
 
   const identity = new IdentityResolver({ overrides: config.deviceOverrides });
   const engine = new DanteEngine({ nic: config.nic, log, identity });
-  const web = createWebServer({ engine, version, log });
+
+  const eventLog = new EventLog({ dir: config.logDir, retentionDays: config.logRetentionDays, log });
+  eventLog.load();
+  log.info(`[Events] Logging to ${eventLog.dir || 'memory only'} (${eventLog.events.length} earlier events loaded)`);
+  eventLog.on('event', (e) => {
+    const line = `[Event] ${e.severity.toUpperCase()} ${e.title}${e.device ? ` - ${e.device}` : ''}: ${e.message}`;
+    if (e.severity === 'error') log.warn(line);
+    else log.info(line);
+  });
+  const monitor = new NetworkMonitor({ engine, eventLog });
+  engine.on('interface-lost', (address) => monitor.interfaceLost(address));
+
+  const web = createWebServer({ engine, eventLog, version, log });
   const localUrl = `http://localhost:${config.port}`;
 
   web.server.on('error', (err) => {
@@ -55,7 +69,9 @@ function main() {
     process.exit(1);
   });
 
+  monitor.start();
   engine.start();
+  setInterval(() => eventLog.prune(), 6 * 3600 * 1000).unref();
 
   web.server.listen(config.port, config.host, () => {
     const lanUrls =
@@ -76,9 +92,10 @@ function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     log.info(`[Server] ${signal} received, shutting down.`);
+    monitor.stop();
     engine.stop();
     web.close();
-    setTimeout(() => process.exit(0), 500).unref();
+    eventLog.flush().finally(() => setTimeout(() => process.exit(0), 300).unref());
   };
   // SIGHUP: the terminal window was closed (the usual way launchers are stopped).
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => shutdown(signal));

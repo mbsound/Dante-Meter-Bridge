@@ -1145,3 +1145,303 @@ button.rx-source-box {
 .meter-strip > .numeric-readout {
   flex-shrink: 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* Event Log tab                                                       */
+/* ------------------------------------------------------------------ */
+
+.tab-btn {
+  position: relative;
+}
+
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background-color: #ff1744;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* In log view, the meter toolbar and device cards give way to the log. */
+body.view-log .workspace-toolbar,
+body.view-log #devicesContainer {
+  display: none;
+}
+
+.event-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 18px 14px;
+  gap: 10px;
+}
+
+.event-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-filter-label {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.event-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background-color: #171b24;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.event-chip:hover {
+  border-color: var(--border-active);
+  color: var(--text-main);
+}
+
+.event-chip.active {
+  background-color: rgba(33, 150, 243, 0.18);
+  border-color: var(--accent-blue);
+  color: var(--text-main);
+}
+
+.event-chip::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid var(--text-dim);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.event-chip.active::before {
+  border-color: var(--accent-blue);
+  background-color: var(--accent-blue);
+  box-shadow: inset 0 0 0 2px #171b24;
+}
+
+.event-chip-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.event-chip.sev-error .event-chip-label { color: #ff6b81; }
+.event-chip.sev-warning .event-chip-label { color: #ffb74d; }
+.event-chip.sev-info .event-chip-label { color: #90caf9; }
+
+.event-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.event-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.event-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+}
+
+.event-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.event-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  background-color: var(--bg-card-header);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.event-table td {
+  padding: 7px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: top;
+  color: var(--text-main);
+}
+
+.event-row.sev-error {
+  background-color: rgba(255, 23, 68, 0.06);
+}
+
+.event-time {
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.event-sev-badge {
+  display: inline-block;
+  min-width: 58px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.event-sev-badge.sev-error { background-color: rgba(255, 23, 68, 0.18); color: #ff6b81; }
+.event-sev-badge.sev-warning { background-color: rgba(255, 152, 0, 0.18); color: #ffb74d; }
+.event-sev-badge.sev-info { background-color: rgba(33, 150, 243, 0.16); color: #90caf9; }
+
+.event-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.event-device-name {
+  display: block;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.event-device-ip {
+  display: block;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.event-message {
+  color: var(--text-muted);
+  min-width: 260px;
+}
+
+@keyframes event-flash {
+  from { background-color: rgba(33, 150, 243, 0.28); }
+}
+
+.event-row.event-new {
+  animation: event-flash 2s ease-out;
+}
+
+.event-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.event-coverage {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.event-coverage summary {
+  cursor: pointer;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.event-coverage ul {
+  margin: 4px 0 8px 18px;
+  columns: 2;
+}
+
+@media (max-width: 760px) {
+  .event-log {
+    padding: 10px 16px 12px;
+  }
+  .event-filter-label {
+    width: 100%;
+  }
+  .event-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .event-actions .search-box {
+    flex: 1 1 100%;
+  }
+  .event-coverage ul {
+    columns: 1;
+  }
+}
+
+.event-log {
+  user-select: text;
+}
+
+/* Narrow screens: the tabs get their own full-width row. */
+@media (max-width: 900px) {
+  .top-header {
+    flex-wrap: wrap;
+  }
+  .direction-tabs {
+    flex: 1 1 100%;
+  }
+  .direction-tabs .tab-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 520px) {
+  .direction-tabs .tab-btn .tab-sub {
+    display: none;
+  }
+  .direction-tabs .tab-btn .tab-label {
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+}

@@ -35,7 +35,7 @@
       </div>
     </div>
 
-    <!-- Direction Tabs: TRANSMITTER / RECEIVER -->
+    <!-- View Tabs: TRANSMITTER / RECEIVER / EVENT LOG -->
     <nav class="direction-tabs" role="tablist">
       <button class="tab-btn active" id="tabTx" data-direction="tx" role="tab" aria-selected="true">
         <span class="tab-icon">▲</span>
@@ -46,6 +46,12 @@
         <span class="tab-icon">▼</span>
         <span class="tab-label">RECEIVER</span>
         <span class="tab-sub">Inputs / Rx</span>
+      </button>
+      <button class="tab-btn" id="tabLog" role="tab" aria-selected="false">
+        <span class="tab-icon">≡</span>
+        <span class="tab-label">EVENT LOG</span>
+        <span class="tab-sub">Network events</span>
+        <span class="tab-badge" id="tabLogBadge" hidden title="New errors since you last opened the log">0</span>
       </button>
     </nav>
 
@@ -100,6 +106,45 @@
     </div>
   </main>
 
+  <!-- Event Log -->
+  <section class="event-log" id="eventLogView" hidden aria-label="Event log">
+    <div class="event-toolbar">
+      <div class="event-filter-row">
+        <span class="event-filter-label">Show</span>
+        <div class="event-chips" id="eventCategoryChips" role="group" aria-label="Filter by event type"></div>
+      </div>
+      <div class="event-filter-row">
+        <span class="event-filter-label">Severity</span>
+        <div class="event-chips" id="eventSeverityChips" role="group" aria-label="Filter by severity"></div>
+        <div class="event-actions">
+          <div class="search-box">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+            </svg>
+            <input type="text" id="eventSearch" placeholder="Search device or message…" autocomplete="off">
+          </div>
+          <button class="btn btn-secondary" id="btnEventShowAll" title="Clear all filters">Show All</button>
+          <button class="btn btn-secondary" id="btnEventExport" title="Download the filtered events as a CSV file">Export CSV</button>
+          <button class="btn btn-secondary" id="btnEventClear" title="Clear the on-screen list (saved log files are kept)">Clear List</button>
+        </div>
+      </div>
+      <div class="event-summary" id="eventSummary"></div>
+    </div>
+    <div class="event-table-wrap">
+      <table class="event-table">
+        <thead>
+          <tr><th>Time</th><th>Severity</th><th>Event</th><th>Device</th><th>Details</th></tr>
+        </thead>
+        <tbody id="eventRows"></tbody>
+      </table>
+      <p class="event-empty" id="eventEmpty">No events yet.</p>
+    </div>
+    <details class="event-coverage">
+      <summary>What is logged?</summary>
+      <div id="eventCoverage"></div>
+    </details>
+  </section>
+
   <!-- Bottom Quick Stats Bar -->
   <footer class="bottom-stats-bar">
     <div class="stat-item">Devices: <strong id="statDeviceCount">0</strong></div>
@@ -110,6 +155,7 @@
   </footer>
 
   <script src="levels.js"></script>
+  <script src="eventlog.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -36,8 +36,33 @@ Each receive channel shows the transmitter it's subscribed to. Click it to jump 
 - **Device health:** primary / secondary network sync indicators, secondary-network IP, clock leader (PTP grandmaster) highlight, and sample rate, all read from the devices. If a device doesn't report something (for example its clock status), the indicator says so instead of assuming it's fine.
 - **Offline detection:** a device that goes silent for 7 seconds stays on screen, dimmed and marked **OFFLINE**, for up to a minute (or until you press **Refresh Devices**) so a dropout is easy to spot.
 - **Device identity:** manufacturer, model and versions from Dante Controller's local database when it's installed, plus optional overrides you define yourself.
+- **Event Log tab:** a running record of what happens on the network (see below).
 - **Search** by device name, IP, model or channel name. Collapse / expand state is remembered per device.
 - **NIC switching** from the header without restarting.
+
+---
+
+## Event Log
+
+The **Event Log** tab records network events as they happen, with time, severity, device and details. It logs the conditions Dante Controller logs that are visible on the network, plus some Controller doesn't:
+
+| Filter | Events |
+|---|---|
+| Device Online / Device Offline | A device appears, stops responding, or comes back (with how long it was gone) |
+| Clock Sync | Clock sync unlocked / locked, clock sync warning (frequency offset near the device's limit) |
+| Clock Leader | Elevation to / demotion from clock leader, multiple clock leaders |
+| Audio Mute | Audio mute / un-mute, with the reason (sync loss, clock problem, user mute, ...) |
+| Subscriptions | Resolution failed, other subscription errors, subscription restored, routing changes |
+| Network | Subnet mismatch / conflict, secondary link down / up, late packets |
+| Timeouts | A device that is still on the network but stops answering queries, and its recovery |
+| Configuration | Device renamed, sample rate changed |
+| System | Monitoring started, network interface lost |
+
+**Filtering:** click any number of filter buttons to show only those kinds of events; everything not checked is hidden. The severity buttons (Error / Warning / Info) and the search box narrow the list further. With nothing selected, everything is shown. Filters are remembered per browser.
+
+**History:** events are saved to `logs/dante-events-YYYY-MM-DD.jsonl` (one file per day, kept for 30 days) and reloaded on restart. **Export CSV** downloads exactly what the current filters show. **Clear List** clears the on-screen list for everyone viewing the bridge; the saved files are kept.
+
+Some Dante Controller events describe device-internal states that aren't visible on the network (for example Fail Safe Mode, fanout configuration, pullup/subdomain mismatches and "reboot required"), so they can't be logged here. The tab's **What is logged?** section lists them. Clock sync, mute and clock-warning events need the device to answer clock-status queries, which not all devices do.
 
 ---
 
@@ -75,13 +100,14 @@ node server.js [options]
   -p, --port <port>     Web UI port (default: 8752)
       --host <address>  Address the web UI listens on (default: 0.0.0.0, all interfaces)
   -c, --config <file>   Config file (default: ./dante-meter.config.json if present)
+      --log-dir <dir>   Where the event log is saved (default: ./logs)
       --open            Open the UI in the default browser once started
       --debug           Verbose logging
   -v, --version         Print version and exit
   -h, --help            Show help
 ```
 
-Environment variables `DANTE_IP`, `PORT`, `HOST` and `DEBUG=1` work too. Precedence: command line → environment → config file → defaults.
+Environment variables `DANTE_IP`, `PORT`, `HOST`, `DANTE_LOG_DIR` and `DEBUG=1` work too. Precedence: command line → environment → config file → defaults.
 
 If you don't pick a NIC, the bridge uses the first link-local (`169.254.x.x`) interface — the Dante default — and falls back to the first active interface. You can switch NICs from the UI at any time.
 
@@ -131,6 +157,9 @@ Receivers without their own meters show the level of the transmitter channel the
 | `GET /api/interfaces` | Available network interfaces |
 | `POST /api/interface` | Switch interface: `{"ip": "169.254.x.x"}` or `{"ip": "all"}` |
 | `POST /api/refresh` | Drop offline devices and re-poll the network |
+| `GET /api/events` | Logged events. Optional `category=online,offline`, `severity=error`, `limit=` |
+| `GET /api/events.csv` | The same, as CSV |
+| `POST /api/events/clear` | Clear the in-memory event list (files are kept) |
 
 ---
 

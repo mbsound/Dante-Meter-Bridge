@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0
+
+### Event Log tab
+- New **Event Log** tab recording network events with time, severity, device and details: device online / offline (with outage duration), clock sync unlocked / locked / warning, audio mute / un-mute with reasons, clock leader elevation / demotion and multiple leaders, resolution failures and other subscription errors, subscription restored, routing changes, subnet mismatch / conflict, secondary link down / up, late packets, response timeouts, renames, sample rate changes and system events.
+- Multi-select filter buttons per event type (only checked types are shown), severity filters, search, CSV export of the filtered view.
+- Saved to daily files under `logs/` (30-day retention, `--log-dir` / `logDir` / `logRetentionDays`) and reloaded on restart. Also available at `/api/events` and `/api/events.csv`.
+- A red badge on the tab counts new errors since the log was last opened.
+
+### Fixes
+- Clock status: the port count was read from the wrong byte, so every device was treated as dual-port.
+- Rx channels whose status is 1 with a live dynamic flow are now treated as connected.
+- The header tabs wrap onto their own row on narrow screens instead of running off the edge.
+
 ## 2.0.0
 
 ### Metering

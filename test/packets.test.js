@@ -132,7 +132,7 @@ test('parses Rx channel subscriptions', () => {
   buf.writeUInt16BE(9, 26); // status
   strings.copy(buf, 32);
   const reply = packets.parseArcReply(buf);
-  assert.deepEqual(reply.channels, [{ number: 1, txChannel: 'Vox', txDevice: 'Mic-Rx', name: 'Lead', status: 9 }]);
+  assert.deepEqual(reply.channels, [{ number: 1, txChannel: 'Vox', txDevice: 'Mic-Rx', name: 'Lead', rxStatus: 0, status: 9 }]);
 });
 
 test('ignores replies from other protocols', () => {
@@ -217,5 +217,70 @@ test('parses heartbeat port status and signal presence', () => {
 
 test('a zero-length heartbeat record does not hang the parser', () => {
   const bad = Buffer.alloc(8); // recLen = 0
-  assert.deepEqual(packets.parseHeartbeat(heartbeat([bad])), { mac: null, ports: null, levels: null });
+  assert.deepEqual(packets.parseHeartbeat(heartbeat([bad])), { mac: null, ports: null, levels: null, clockOffsetPpb: null, latePackets: null });
+});
+
+test('heartbeat clock offset and late packet counters', () => {
+  // 0x8001: [len 16, type, extLen 4, payloadLen 4, seq, ?, int32 ppb]
+  const offset = Buffer.alloc(16);
+  offset.writeUInt16BE(16, 0);
+  offset.writeUInt16BE(0x8001, 2);
+  offset.writeUInt16BE(4, 4);
+  offset.writeUInt16BE(4, 6);
+  offset.writeInt32BE(-222222, 12);
+
+  // 0x8004: subheader 4 bytes, payload = count, first, countersAt; then u32 counters
+  const late = Buffer.alloc(28);
+  late.writeUInt16BE(28, 0);
+  late.writeUInt16BE(0x8004, 2);
+  late.writeUInt16BE(4, 4); // subheader length -> payload at 12
+  late.writeUInt16BE(16, 6); // payload length
+  late.writeUInt16BE(2, 12); // two flows
+  late.writeUInt16BE(0, 14); // first index
+  late.writeUInt16BE(20, 16); // counters at 20
+  late.writeUInt32BE(3, 20);
+  late.writeUInt32BE(4, 24);
+
+  const hb = packets.parseHeartbeat(heartbeat([offset, late]));
+  assert.equal(hb.clockOffsetPpb, -222222);
+  assert.equal(hb.latePackets, 7);
+});
+
+function clockReply({ revision = 0x0726, state = 3, servo = 3, uuid = '000edd0000010000', gm = '000edd0000020000', ports = 2, maxDrift = 100000, mute = 0 } = {}) {
+  const payload = Buffer.alloc(0x30 + 32);
+  payload.writeUInt16BE(revision, 0);
+  payload.writeUInt16BE(32, 2); // clocking status message
+  payload.writeUInt16BE(state, 8);
+  payload.writeUInt16BE(servo, 10);
+  payload.writeInt32BE(-1500, 16);
+  Buffer.from(uuid, 'hex').copy(payload, 20);
+  Buffer.from(gm, 'hex').copy(payload, 36);
+  payload.writeUInt16BE(ports, 0x2c);
+  payload.writeUInt16BE(0x30, 0x2e); // extension offset
+  payload.writeInt32BE(maxDrift, 0x30 + 4);
+  payload.writeUInt16BE(mute, 0x30 + 28);
+  const header = Buffer.alloc(24);
+  header.writeUInt16BE(0xffff, 0);
+  header.writeUInt16BE(24 + payload.length, 2);
+  Buffer.from('000edd000001', 'hex').copy(header, 8);
+  return Buffer.concat([header, payload]);
+}
+
+test('clock status: identities, port count, drift limit and mute flags', () => {
+  const { clock } = packets.parseSettingsReply(clockReply({ mute: 1 | 16 }));
+  assert.equal(clock.revision, 0x0726);
+  assert.equal(clock.servo, 3);
+  assert.equal(clock.uuid, '000edd0000010000');
+  assert.equal(clock.grandmasterUuid, '000edd0000020000');
+  assert.equal(clock.isMaster, false);
+  assert.equal(clock.numPorts, 2);
+  assert.equal(clock.frequencyOffsetPpb, -1500);
+  assert.equal(clock.maxDriftPpb, 100000);
+  assert.equal(clock.muteFlags, 17);
+
+  const leader = packets.parseSettingsReply(clockReply({ gm: '000edd0000010000' })).clock;
+  assert.equal(leader.isMaster, true);
+
+  // Before 0x0704 there are no mute flags.
+  assert.equal(packets.parseSettingsReply(clockReply({ revision: 0x0600, mute: 1 })).clock.muteFlags, null);
 });

@@ -4,6 +4,8 @@
   "nic": null,
   "open": false,
   "debug": false,
+  "logDir": "./logs",
+  "logRetentionDays": 30,
   "deviceOverrides": {
     "Stagebox-1": {
       "manufacturer": "Example Audio Co",

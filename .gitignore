@@ -30,3 +30,6 @@ dante-meter.config.json
 
 # Coverage / test output
 coverage/
+
+# Event log files
+logs/
