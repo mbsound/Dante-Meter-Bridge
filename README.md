@@ -26,6 +26,15 @@ Each receive channel shows the transmitter it's subscribed to. Click it to jump 
 
 ![Transmitter Blink](Screenshots/Tx%20Blink.png)
 
+### Event Log
+Every network event with time, severity, device and details. A dropped transmitter shows up as the device going offline, the grouped subscription failure on the receiver, then recovery:
+
+![Event Log](Screenshots/Event%20Log.jpg)
+
+Check any combination of filter buttons to show only those events. Here, **Device Online** and **Device Offline** are checked, so everything else is hidden:
+
+![Event Log filtered to device online and offline](Screenshots/Event%20Log%20Filtered.jpg)
+
 ---
 
 ## Features
