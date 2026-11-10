@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.1
+
+### Fixes
+- **Device names and ports could land on the wrong device.** When a computer's own mDNS responder (common on Windows, e.g. alongside Dante Virtual Soundcard) relayed another device's advertisement, the bridge attributed that name and its ARC/CMC ports to the relaying computer. The Event Log then showed two devices "swapping" names, and the bridge queried the wrong port. mDNS answers are now only trusted when they include the device's own address, and a device's own ARC reply is always authoritative for its name.
+- **Dante Virtual Soundcard showed no Tx channels.** ARC replies are now accepted with every Dante ARC protocol ID (not only 0x2729). Until a device answers, the bridge tries protocols 0x2729 / 0x27FF and ports 4440 / 4455, and CMC on 8800 / 38800, then keeps whichever the device answers on.
+- **Primary sync status missing on many devices.** The bridge now also sends the clock-status query netaudio uses (a read-only clock-control query), which more devices answer.
+
+### Added
+- Warning bar and Event Log entries when devices answer but no Dante multicast (heartbeats) or meter streams arrive, the usual sign of a firewall (on Windows, a Public network profile).
+- `GET /api/diagnostics`: per-device ports, ARC protocol, packet counters and multicast health.
+- README: Windows Firewall steps.
+
 ## 2.1.0
 
 ### Event Log tab

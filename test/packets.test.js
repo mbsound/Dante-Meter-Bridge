@@ -115,7 +115,7 @@ test('parses channel counts and device name', () => {
   const counts = arcReply(ARC_COMMANDS.CHANNEL_COUNTS, 16);
   counts[13] = 32;
   counts[15] = 8;
-  assert.deepEqual(packets.parseArcReply(counts), { commandId: ARC_COMMANDS.CHANNEL_COUNTS, txCount: 32, rxCount: 8 });
+  assert.deepEqual(packets.parseArcReply(counts), { protocolId: 0x2729, commandId: ARC_COMMANDS.CHANNEL_COUNTS, txCount: 32, rxCount: 8 });
 
   const name = Buffer.concat([arcReply(ARC_COMMANDS.DEVICE_NAME, 10), Buffer.from('Stagebox-1\0')]);
   assert.equal(packets.parseArcReply(name).name, 'Stagebox-1');
@@ -283,4 +283,34 @@ test('clock status: identities, port count, drift limit and mute flags', () => {
 
   // Before 0x0704 there are no mute flags.
   assert.equal(packets.parseSettingsReply(clockReply({ revision: 0x0600, mute: 1 })).clock.muteFlags, null);
+});
+
+test('ARC replies with any Dante ARC protocol ID are accepted (e.g. Dante Virtual Soundcard)', () => {
+  for (const protocolId of [0x27ff, 0x2729, 0x2809, 0x280c]) {
+    const counts = arcReply(ARC_COMMANDS.CHANNEL_COUNTS, 16);
+    counts.writeUInt16BE(protocolId, 0);
+    counts[13] = 64;
+    counts[15] = 64;
+    const reply = packets.parseArcReply(counts);
+    assert.equal(reply.protocolId, protocolId);
+    assert.equal(reply.txCount, 64);
+  }
+  const other = arcReply(ARC_COMMANDS.CHANNEL_COUNTS, 16);
+  other.writeUInt16BE(0x1234, 0);
+  assert.equal(packets.parseArcReply(other), null);
+});
+
+test('ARC requests can be sent with the alternative protocol ID', () => {
+  assert.equal(hex(packets.arcCommand(1, ARC_COMMANDS.DEVICE_NAME, undefined, 0x27ff)), '27ff000d000110020000000000');
+});
+
+test('clock refresh is a pure clock-control query (revision 0x0734, no change flags)', () => {
+  const pkt = packets.clockRefreshQuery(5, MAC);
+  // header(8) + 2a84 + mac + 0000 + "Audinate" + record(40)
+  assert.equal(pkt.length, 24 + 40);
+  const record = pkt.subarray(24);
+  assert.equal(record.readUInt16BE(0), 0x0734);
+  assert.equal(record.readUInt16BE(2), 0x0021);
+  assert.equal(record.readUInt32BE(4), 100);
+  assert.ok(record.subarray(8).every((b) => b === 0), 'all change flags and values zero');
 });

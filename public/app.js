@@ -203,6 +203,9 @@
       case 'meters':
         state.meters = msg.d || {};
         break;
+      case 'health':
+        renderHealth(msg.data);
+        break;
       case 'events':
       case 'event':
       case 'events_cleared':
@@ -214,6 +217,20 @@
   // ---------------------------------------------------------------------------
   // Header controls
   // ---------------------------------------------------------------------------
+
+  function renderHealth(health) {
+    const banner = $('healthBanner');
+    const problems = [];
+    if (health.multicastBlocked) problems.push('no Dante heartbeats (sync and secondary-network status)');
+    if (health.meteringBlocked) problems.push('no meter streams');
+    banner.hidden = problems.length === 0;
+    if (!problems.length) return;
+    const fix =
+      health.platform === 'win32'
+        ? 'Allow Node.js through Windows Defender Firewall on Public networks; Windows usually treats a Dante network as an "Unidentified network".'
+        : 'Check that a firewall allows incoming UDP for Node.js on the Dante interface.';
+    banner.textContent = `Devices are answering, but this computer is receiving ${problems.join(' or ')}. ${fix}`;
+  }
 
   function populateNicSelect() {
     const select = els.nicSelect;

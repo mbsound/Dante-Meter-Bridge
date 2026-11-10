@@ -234,23 +234,139 @@ test('a malformed packet never throws out of a handler', () => {
   }
 });
 
-test('mDNS answers relayed by this machine are not mistaken for a device at our IP', () => {
-  const mdns = require('../lib/dante/mdns');
-  const engine = makeEngine();
-  engine.localAddresses = new Set(['169.254.9.1']);
+// ---------------------------------------------------------------------------
+// mDNS: relayed answers (e.g. a PC's own responder caching other devices)
+// ---------------------------------------------------------------------------
 
-  const header = Buffer.alloc(12);
-  header.writeUInt16BE(1, 6);
-  const name = mdns.encodeName('Stagebox-1._netaudio-arc._udp.local');
+const mdnsLib = require('../lib/dante/mdns');
+
+function mdnsRecord(name, type, rdata) {
   const fixed = Buffer.alloc(10);
-  fixed.writeUInt16BE(mdns.TYPE.TXT, 0);
+  fixed.writeUInt16BE(type, 0);
   fixed.writeUInt16BE(1, 2);
-  fixed.writeUInt16BE(9, 8);
-  const response = Buffer.concat([header, name, fixed, Buffer.from([8]), Buffer.from('mf=Shure')]);
+  fixed.writeUInt32BE(120, 4);
+  fixed.writeUInt16BE(rdata.length, 8);
+  return Buffer.concat([mdnsLib.encodeName(name), fixed, rdata]);
+}
 
-  engine.handleMdns(response, { address: '169.254.9.1', port: 5353 });
+/** A Dante ARC advertisement for `name`, with or without an address record. */
+function advert(name, { port = 4440, address = null, model = 'SB16' } = {}) {
+  const instance = `${name}._netaudio-arc._udp.local`;
+  const host = `${name.toLowerCase()}.local`;
+  const srv = Buffer.concat([Buffer.from([0, 0, 0, 0, port >> 8, port & 0xff]), mdnsLib.encodeName(host)]);
+  const txtEntry = Buffer.from(`model=${model}`);
+  const records = [
+    mdnsRecord('_netaudio-arc._udp.local', mdnsLib.TYPE.PTR, mdnsLib.encodeName(instance)),
+    mdnsRecord(instance, mdnsLib.TYPE.SRV, srv),
+    mdnsRecord(instance, mdnsLib.TYPE.TXT, Buffer.concat([Buffer.from([txtEntry.length]), txtEntry]))
+  ];
+  if (address) records.push(mdnsRecord(host, mdnsLib.TYPE.A, Buffer.from(address.split('.').map(Number))));
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(0x8400, 2);
+  header.writeUInt16BE(records.length, 6);
+  return Buffer.concat([header, ...records]);
+}
+
+test('a device announcing itself (with its address) is registered with its name and ports', () => {
+  const engine = makeEngine();
+  engine.handleMdns(advert('Stagebox-1', { port: 4455, address: '169.254.1.10' }), { address: '169.254.1.10' });
+  const dev = engine.devices.get('169.254.1.10');
+  assert.equal(dev.name, 'Stagebox-1');
+  assert.equal(dev.ports.ARC, 4455);
+  assert.equal(dev.arcPortAdvertised, true);
+});
+
+test('relayed answers never rename the relaying PC or move ports onto it (DVS name swap)', () => {
+  const engine = makeEngine();
+  // Real hardware and a PC running Dante Virtual Soundcard, both named by their own ARC replies.
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.10'));
+  engine.handleArc(nameReply('DVS-PC'), { address: '169.254.1.50', port: 14440 });
+  const dvs = engine.devices.get('169.254.1.50');
+  assert.equal(dvs.ports.ARC, 14440, 'port learned from the reply');
+
+  // The PC's mDNS responder relays the hardware's advertisement (no address record).
+  engine.handleMdns(advert('Stagebox-1', { port: 4440, model: 'SB16' }), { address: '169.254.1.50' });
+
+  assert.equal(dvs.name, 'DVS-PC', 'not renamed');
+  assert.equal(dvs.ports.ARC, 14440, 'ports untouched');
+  const hw = engine.devices.get('169.254.1.10');
+  assert.equal(hw.name, 'Stagebox-1');
+  assert.equal(hw.mdnsModel, 'SB16', 'relayed data applied to the device it describes');
+});
+
+test('an unknown relayed instance triggers a direct lookup instead of a registration', () => {
+  const engine = makeEngine();
+  engine.handleMdns(advert('Mystery-Box'), { address: '169.254.1.50' });
   assert.equal(engine.devices.size, 0);
+  const lookup = engine.sent.find((s) => s.sock === 'MDNS');
+  assert.ok(lookup.buf.includes(mdnsLib.encodeName('Mystery-Box._netaudio-arc._udp.local')));
+  assert.equal(lookup.buf.readUInt16BE(12 + mdnsLib.encodeName('Mystery-Box._netaudio-arc._udp.local').length), mdnsLib.TYPE.SRV);
+});
 
-  engine.handleMdns(response, { address: '169.254.1.10', port: 5353 });
-  assert.equal(engine.getDevices()[0].name, 'Stagebox-1');
+test("a device's own name wins over mDNS, and a name can't be claimed twice", () => {
+  const engine = makeEngine();
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.10'));
+  engine.handleMdns(advert('Old-Name', { address: '169.254.1.10' }), { address: '169.254.1.10' });
+  assert.equal(engine.devices.get('169.254.1.10').name, 'Stagebox-1');
+
+  engine.handleMdns(advert('Stagebox-1', { address: '169.254.1.60' }), { address: '169.254.1.60' });
+  assert.notEqual(engine.devices.get('169.254.1.60').name, 'Stagebox-1');
+});
+
+// ---------------------------------------------------------------------------
+// Devices that only answer some ARC protocol IDs / ports (e.g. DVS)
+// ---------------------------------------------------------------------------
+
+test('until a device answers, polls cycle ARC protocol 0x2729/0x27FF and ports 4440/4455', () => {
+  const engine = makeEngine();
+  const dev = engine.register('169.254.1.50');
+  engine.sent = [];
+  const targets = [];
+  for (let i = 0; i < 4; i++) {
+    engine.sent = [];
+    engine.pollDevice('169.254.1.50');
+    const arc = engine.sent.find((s) => s.sock === 'ARC');
+    targets.push(`${arc.buf.readUInt16BE(0).toString(16)}@${arc.port}`);
+  }
+  assert.deepEqual(new Set(targets), new Set(['2729@4440', '27ff@4440', '2729@4455', '27ff@4455']));
+
+  // It answers on 4455 with 0x27FF: from then on, only that is used.
+  const reply = nameReply('DVS-PC');
+  reply.writeUInt16BE(0x27ff, 0);
+  engine.handleArc(reply, { address: '169.254.1.50', port: 4455 });
+  engine.sent = [];
+  engine.pollDevice('169.254.1.50');
+  const used = new Set(engine.sent.filter((s) => s.sock === 'ARC').map((s) => `${s.buf.readUInt16BE(0).toString(16)}@${s.port}`));
+  assert.deepEqual([...used], ['27ff@4455']);
+  assert.equal(dev.name, 'DVS-PC');
+});
+
+test('CMC requests go to both the standard and DVS ports until one answers', () => {
+  const engine = makeEngine();
+  engine.register('169.254.1.50');
+  engine.sent = [];
+  engine.querySettingsPort('169.254.1.50');
+  assert.deepEqual(engine.sent.filter((s) => s.sock === 'CMC').map((s) => s.port), [8800, 38800]);
+
+  const cmc = Buffer.alloc(30);
+  cmc.writeUInt16BE(0x1200, 0);
+  cmc.writeUInt16BE(0x1001, 6);
+  cmc.writeUInt16BE(38700, 28);
+  engine.handleCmc(cmc, { address: '169.254.1.50', port: 38800 });
+  engine.sent = [];
+  engine.querySettingsPort('169.254.1.50');
+  assert.deepEqual(engine.sent.filter((s) => s.sock === 'CMC').map((s) => s.port), [38800]);
+  assert.equal(engine.devices.get('169.254.1.50').ports.SETTINGS, 38700);
+});
+
+test('health: devices answering but no heartbeats is reported as blocked multicast', () => {
+  const engine = makeEngine();
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.10'));
+  const now = Date.now();
+  assert.equal(engine.getHealth(now).multicastBlocked, false, 'grace period');
+  assert.equal(engine.getHealth(now + 25000).multicastBlocked, false, 'device itself is offline by then');
+  engine.devices.get('169.254.1.10').lastSeen = now + 25000;
+  assert.equal(engine.getHealth(now + 25000).multicastBlocked, true);
+  engine.stats.lastHeartbeatAt = now + 24000;
+  assert.equal(engine.getHealth(now + 25000).multicastBlocked, false);
 });

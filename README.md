@@ -168,6 +168,7 @@ Receivers without their own meters show the level of the transmitter channel the
 | `POST /api/refresh` | Drop offline devices and re-poll the network |
 | `GET /api/events` | Logged events. Optional `category=online,offline`, `severity=error`, `limit=` |
 | `GET /api/events.csv` | The same, as CSV |
+| `GET /api/diagnostics` | Per-device ports, protocol, packet counters and multicast health, for troubleshooting |
 | `POST /api/events/clear` | Clear the in-memory event list (files are kept) |
 
 ---
@@ -183,12 +184,15 @@ Allow Node.js to accept incoming connections. The bridge listens on:
 
 It sends queries to devices on UDP 4440, 8700, 8702 and 8800. Replies come back to temporary ports, which stateful firewalls allow automatically.
 
-On macOS, accept the "allow incoming connections" prompt the first time you run it. On Windows, allow Node.js through Windows Defender Firewall on **Private** networks.
+On macOS, accept the "allow incoming connections" prompt the first time you run it.
+
+**Windows:** Windows usually classifies a Dante network as an *Unidentified network*, which is a **Public** network. When Windows Defender Firewall asks about Node.js, tick **Public networks** as well as Private. If you've already answered, open *Windows Security → Firewall & network protection → Allow an app through firewall*, find **Node.js JavaScript Runtime**, and tick **Public**. Without this, devices still appear (the bridge's own queries get answers), but heartbeats and meter streams are blocked, so sync dots stay hollow and meters stay empty. The bridge shows an orange warning bar and logs a *Not receiving Dante multicast* event when this happens.
 
 ## Troubleshooting
 
 - **No devices:** check the NIC selector is on your Dante network. Run with `--debug` for extra diagnostic logging.
 - **Devices listed but no meters:** check the firewall allows incoming UDP on the metering port.
+- **A device shows no channels or no status:** open `http://localhost:8752/api/diagnostics` and send the output with your report. It lists, per device, which ports and protocol the bridge is using, which ones answered, and packet counts by type.
 - **"Port 8752 is already in use":** the bridge is probably already running. Close the other window or use `--port`.
 
 ## Development
