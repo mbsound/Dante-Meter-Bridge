@@ -1145,7 +1145,7 @@ button.rx-source-box {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .device-header,
   .device-card.collapsed {
     height: auto;
@@ -1163,6 +1163,9 @@ button.rx-source-box {
   .device-name {
     overflow-wrap: anywhere;
   }
+  .device-badge {
+    white-space: nowrap;
+  }
   .device-header-right {
     flex-shrink: 1;
     min-width: 0;
@@ -1178,6 +1181,35 @@ button.rx-source-box {
   }
   .device-id-primary {
     white-space: normal;
+  }
+}
+
+/* Narrow screens: the toolbar wraps instead of pushing the page wider. */
+@media (max-width: 900px) {
+  .workspace-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 7px 12px;
+  }
+  .workspace-toolbar-left,
+  .workspace-toolbar-right {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    min-width: 0;
+  }
+  .workspace-toolbar-right {
+    flex: 1 1 100%;
+  }
+  .workspace-toolbar-right .search-box {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+  .workspace-toolbar-right .search-box input {
+    width: 100%;
+    min-width: 0;
+  }
+  .main-container {
+    padding: 12px;
   }
 }
 
