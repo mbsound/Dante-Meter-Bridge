@@ -45,7 +45,7 @@ Check any combination of filter buttons to show only those events. Here, **Devic
 - **Device health:** primary / secondary network sync indicators, secondary-network IP, clock leader (PTP grandmaster) highlight, and sample rate, all read from the devices. If a device doesn't report something (for example its clock status), the indicator says so instead of assuming it's fine.
 - **Offline detection:** a device that goes silent for 7 seconds stays on screen, dimmed and marked **OFFLINE**, for up to a minute (or until you press **Refresh Devices**) so a dropout is easy to spot.
 - **Device identity:** manufacturer, model and versions from Dante Controller's local database when it's installed, plus optional overrides you define yourself.
-- **Custom tab:** build your own view of just the channels you care about, Tx and Rx from any devices, grouped by device (see below).
+- **Custom tab:** build your own views of just the channels you care about, Tx and Rx from any devices, grouped by device, and save as many named layouts as you need (see below).
 - **Event Log tab:** a running record of what happens on the network (see below).
 - **Search** by device name, IP, model or channel name. Collapse / expand state is remembered per device.
 - **NIC switching** from the header without restarting.
@@ -57,8 +57,11 @@ Check any combination of filter buttons to show only those events. Here, **Devic
 The **Custom** tab shows only the channels you pick, from any number of devices, with a device's Tx and Rx channels grouped together in one card.
 
 - **Add channels:** in the Transmitter or Receiver tab, right-click a meter (long-press on a touch screen) and choose **Add to Custom**. To add several at once, click one meter, then Cmd/Ctrl-click others or Shift-click to select a range, and right-click. **Add all Tx/Rx channels of …** adds a whole device. Channels already in the Custom view are marked with ◆.
-- **Remove channels:** right-click a meter in the Custom tab and choose **Remove from Custom**, or remove a whole device with its ✕ button. **Clear Custom** empties the view. **Show in Transmitter/Receiver tab** jumps to the channel in its normal tab.
-- **Saved on the bridge:** the layout is stored in `custom-layout.json` next to the app (git-ignored; change the location with `customLayoutFile` in the config file or `DANTE_CUSTOM_LAYOUT`). Every screen viewing the bridge sees the same layout and changes appear on all of them immediately. Devices are remembered by name, so the layout survives IP address changes; a device that isn't on the network is shown dimmed until it returns.
+- **Remove channels:** right-click a meter in the Custom tab and choose **Remove from Custom**, or remove a whole device with its ✕ button. **Clear Layout** empties the current layout. **Show in Transmitter/Receiver tab** jumps to the channel in its normal tab.
+- **Saved layouts:** keep as many named layouts as you like (for example *FOH*, *Monitors*, *Playback*) and pick one from the **Layout** menu at the top of the Custom tab. Changes save automatically to the layout you're viewing, and it's all still there the next time you open the app. **New** starts an empty layout, **Save As…** copies the current one under a new name, and **Rename** / **Delete** do what they say.
+- **Every screen, its own choice:** the layouts are stored on the bridge, so any computer or tablet viewing it can open any of them. Each screen remembers which layout it was showing; switching on the iPad doesn't change the PC. Two screens on the same layout see each other's changes immediately.
+- **Export / Import:** **Export** downloads the current layout as a `.dante-layout.json` file; **Import** loads one as a new layout. Use it to back layouts up, or to move them to another computer running the bridge.
+- **Where they're kept:** `custom-layout.json` next to the app (git-ignored, as it contains your device names). Change the location with `customLayoutFile` in the config file or `DANTE_CUSTOM_LAYOUT`. Devices are remembered by name, so layouts survive IP address changes; a device that isn't on the network is shown dimmed until it returns.
 
 ---
 
@@ -181,7 +184,8 @@ Receivers without their own meters show the level of the transmitter channel the
 | `GET /api/events.csv` | The same, as CSV |
 | `GET /api/diagnostics` | Per-device ports, protocol, packet counters and multicast health, for troubleshooting |
 | `POST /api/events/clear` | Clear the in-memory event list (files are kept) |
-| `GET /api/custom-layout` | The Custom tab layout: `{"devices": [{"name", "tx": [channel numbers], "rx": [...]}]}` |
+| `GET /api/custom-layouts` | Saved Custom layouts: `{"layouts": [{"name", "devices": [{"name", "tx": [channel numbers], "rx": [...]}]}]}` |
+| `GET /api/custom-layouts/export?name=` | Download one layout as a file that **Import** accepts |
 
 ---
 

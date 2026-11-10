@@ -12,7 +12,7 @@ const net = require('net');
 const path = require('path');
 const http = require('http');
 const { EventEmitter } = require('events');
-const { CustomLayout, validateLayout } = require('../lib/custom-layout');
+const { CustomLayouts, validateLayout, validateLibrary, parseExport, toExport } = require('../lib/custom-layout');
 const { createWebServer } = require('../lib/web/server');
 
 function tmpDir(t) {
@@ -54,25 +54,69 @@ test('invalid layouts are rejected', () => {
   }
 });
 
-test('the layout is saved to disk and reloaded', (t) => {
+test('layouts are saved to disk and reloaded', (t) => {
   const file = path.join(tmpDir(t), 'nested', 'custom-layout.json');
-  const a = new CustomLayout({ file });
-  let changed = null;
-  a.on('changed', (layout) => (changed = layout));
-  a.set({ devices: [{ name: 'Stagebox-1', tx: [1, 3, 24], rx: [2] }] });
-  assert.deepEqual(changed.devices[0].tx, [1, 3, 24]);
+  const a = new CustomLayouts({ file });
+  let changes = 0;
+  a.on('changed', () => changes++);
+  a.save('FOH', [{ name: 'Stagebox-1', tx: [24, 1, 3], rx: [2] }]);
+  a.save('Monitors', [{ name: 'Desk', rx: [5] }]);
+  assert.equal(changes, 2);
 
-  const b = new CustomLayout({ file }).load();
-  assert.deepEqual(b.get(), { devices: [{ name: 'Stagebox-1', tx: [1, 3, 24], rx: [2] }] });
+  const b = new CustomLayouts({ file }).load();
+  assert.deepEqual(b.get(), {
+    layouts: [
+      { name: 'FOH', devices: [{ name: 'Stagebox-1', tx: [1, 3, 24], rx: [2] }] },
+      { name: 'Monitors', devices: [{ name: 'Desk', tx: [], rx: [5] }] }
+    ]
+  });
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 2);
+});
+
+test('a v2.2.0 single-layout file becomes "Layout 1"', (t) => {
+  const file = path.join(tmpDir(t), 'custom-layout.json');
+  fs.writeFileSync(file, JSON.stringify({ devices: [{ name: 'Stagebox-1', tx: [1, 3] }] }));
+  assert.deepEqual(new CustomLayouts({ file }).load().get(), {
+    layouts: [{ name: 'Layout 1', devices: [{ name: 'Stagebox-1', tx: [1, 3], rx: [] }] }]
+  });
+  assert.deepEqual(validateLibrary({ devices: [] }), { layouts: [] });
+});
+
+test('create picks a free name; rename and delete; names are unique ignoring case', () => {
+  const lib = new CustomLayouts();
+  assert.equal(lib.create('FOH'), 'FOH');
+  assert.equal(lib.create('foh'), 'foh (2)');
+  assert.equal(lib.create('FOH'), 'FOH (3)');
+  assert.equal(lib.rename('foh (2)', 'Monitors'), 'Monitors');
+  assert.throws(() => lib.rename('Monitors', 'fOh'), /already exists/);
+  assert.equal(lib.rename('FOH', 'foh'), 'foh', 'changing only the case is allowed');
+  lib.remove('FOH (3)');
+  assert.deepEqual(lib.get().layouts.map((l) => l.name), ['foh', 'Monitors']);
+  assert.throws(() => lib.remove('nope'), /no layout/);
+  assert.throws(() => lib.save('   ', []), /empty/);
+  assert.throws(() => lib.save('x'.repeat(49), []), /longer/);
+  // Saving under an existing name (any case) updates that layout.
+  lib.save('MONITORS', [{ name: 'Desk', tx: [1] }]);
+  assert.deepEqual(lib.get().layouts.map((l) => [l.name, l.devices.length]), [['foh', 0], ['Monitors', 1]]);
+});
+
+test('export files round-trip, and foreign files are refused', () => {
+  const exported = toExport({ name: 'FOH', devices: [{ name: 'Stagebox-1', tx: [1], rx: [] }] });
+  assert.equal(exported.format, 'dante-meter-bridge-layout');
+  assert.deepEqual(parseExport(JSON.parse(JSON.stringify(exported))), { name: 'FOH', devices: [{ name: 'Stagebox-1', tx: [1], rx: [] }] });
+  assert.deepEqual(parseExport({ devices: [{ name: 'A', rx: [2] }] }).name, 'Imported layout');
+  assert.throws(() => parseExport({ format: 'something-else', devices: [] }), /not a Dante Meter Bridge/);
+  assert.throws(() => parseExport({ hello: 1 }), /no "devices"/);
+  assert.throws(() => parseExport(null), /not a layout/);
 });
 
 test('a missing or corrupt file starts empty', (t) => {
   const dir = tmpDir(t);
-  assert.deepEqual(new CustomLayout({ file: path.join(dir, 'none.json') }).load().get(), { devices: [] });
+  assert.deepEqual(new CustomLayouts({ file: path.join(dir, 'none.json') }).load().get(), { layouts: [] });
   const corrupt = path.join(dir, 'bad.json');
   fs.writeFileSync(corrupt, '{nope');
   const warnings = [];
-  assert.deepEqual(new CustomLayout({ file: corrupt, log: { warn: (m) => warnings.push(m) } }).load().get(), { devices: [] });
+  assert.deepEqual(new CustomLayouts({ file: corrupt, log: { warn: (m) => warnings.push(m) } }).load().get(), { layouts: [] });
   assert.equal(warnings.length, 1);
 });
 
@@ -128,8 +172,13 @@ function wsClient(port) {
         if (buf.length < offset + len) return;
         if ((buf[0] & 0x0f) === 1) {
           const msg = JSON.parse(buf.subarray(offset, offset + len).toString());
-          messages.push(msg);
-          for (const w of [...waiters]) if (w.match(msg)) waiters.splice(waiters.indexOf(w), 1) && w.resolve(msg);
+          const waiter = waiters.find((w) => w.match(msg));
+          if (waiter) {
+            waiters.splice(waiters.indexOf(waiter), 1);
+            waiter.resolve(msg);
+          } else {
+            messages.push(msg);
+          }
         }
         buf = buf.subarray(offset + len);
       }
@@ -178,10 +227,20 @@ function getJson(port, urlPath) {
   });
 }
 
-test('a layout set from one screen is saved and pushed to every screen', async (t) => {
+function getRaw(port, urlPath) {
+  return new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: urlPath }, (res) => {
+      let body = '';
+      res.on('data', (c) => (body += c));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    }).on('error', reject);
+  });
+}
+
+test('saved layouts: changes from one screen are stored and pushed to every screen', async (t) => {
   const file = path.join(tmpDir(t), 'custom-layout.json');
-  const customLayout = new CustomLayout({ file });
-  const web = createWebServer({ engine: fakeEngine(), customLayout, version: 'test', log: { info() {}, warn() {}, error() {} } });
+  const customLayouts = new CustomLayouts({ file });
+  const web = createWebServer({ engine: fakeEngine(), customLayouts, version: 'test', log: { info() {}, warn() {}, error() {} } });
   t.after(() => web.close());
   await new Promise((resolve) => web.server.listen(0, '127.0.0.1', resolve));
   const port = web.server.address().port;
@@ -192,18 +251,43 @@ test('a layout set from one screen is saved and pushed to every screen', async (
     a.socket.destroy();
     b.socket.destroy();
   });
-  // Each screen gets the current (empty) layout on connect.
-  assert.deepEqual((await a.next((m) => m.type === 'custom_layout')).data, { devices: [] });
-  await b.next((m) => m.type === 'custom_layout');
+  const library = (c) => c.next((m) => m.type === 'custom_layouts').then((m) => m.data);
+  assert.deepEqual(await library(a), { layouts: [] });
+  await library(b);
 
-  a.send({ type: 'custom_layout_set', data: { devices: [{ name: 'Stagebox-1', tx: [24, 1, 3], rx: [2] }] } });
-  const pushed = await b.next((m) => m.type === 'custom_layout');
-  assert.deepEqual(pushed.data, { devices: [{ name: 'Stagebox-1', tx: [1, 3, 24], rx: [2] }] });
-  assert.deepEqual(await getJson(port, '/api/custom-layout'), pushed.data);
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), pushed.data);
+  a.send({ type: 'layout_save', requestId: 1, name: 'FOH', devices: [{ name: 'Stagebox-1', tx: [24, 1, 3], rx: [2] }] });
+  assert.deepEqual(await a.next((m) => m.type === 'layout_result'), { type: 'layout_result', data: { requestId: 1, name: 'FOH' } });
+  const pushed = await library(b);
+  assert.deepEqual(pushed, { layouts: [{ name: 'FOH', devices: [{ name: 'Stagebox-1', tx: [1, 3, 24], rx: [2] }] }] });
+  assert.deepEqual(await getJson(port, '/api/custom-layouts'), pushed);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).layouts, pushed.layouts);
+  await library(a);
 
-  // An invalid layout is refused, and the sender gets the current one back.
-  a.send({ type: 'custom_layout_set', data: { devices: [{ name: 'X', tx: [-1] }] } });
-  assert.equal((await a.next((m) => m.type === 'custom_layout_error')).type, 'custom_layout_error');
-  assert.deepEqual((await a.next((m) => m.type === 'custom_layout')).data, pushed.data);
+  // Save As / New pick a free name and report it back.
+  a.send({ type: 'layout_create', requestId: 2, name: 'foh', devices: [] });
+  assert.equal((await a.next((m) => m.type === 'layout_result')).data.name, 'foh (2)');
+  await library(a);
+
+  // Export downloads a file that Import turns back into a layout.
+  const exported = await getRaw(port, '/api/custom-layouts/export?name=FOH');
+  assert.equal(exported.status, 200);
+  assert.match(exported.headers['content-disposition'], /attachment; filename="FOH\.dante-layout\.json"/);
+  a.send({ type: 'layout_import', requestId: 3, data: JSON.parse(exported.body) });
+  assert.equal((await a.next((m) => m.type === 'layout_result')).data.name, 'FOH (3)', '"foh (2)" is taken (names ignore case)');
+  const afterImport = await library(a);
+  assert.deepEqual(afterImport.layouts.find((l) => l.name === 'FOH (3)').devices, pushed.layouts[0].devices);
+  assert.equal((await getRaw(port, '/api/custom-layouts/export?name=nope')).status, 404);
+
+  a.send({ type: 'layout_rename', requestId: 4, from: 'foh (2)', to: 'Monitors' });
+  assert.equal((await a.next((m) => m.type === 'layout_result')).data.name, 'Monitors');
+  await library(a);
+  a.send({ type: 'layout_delete', requestId: 5, name: 'FOH (3)' });
+  await a.next((m) => m.type === 'layout_result');
+  assert.deepEqual((await library(a)).layouts.map((l) => l.name), ['FOH', 'Monitors']);
+
+  // Bad requests get an error and the current library back.
+  a.send({ type: 'layout_save', requestId: 6, name: 'X', devices: [{ name: 'X', tx: [-1] }] });
+  const error = await a.next((m) => m.type === 'custom_layout_error');
+  assert.equal(error.data.requestId, 6);
+  assert.deepEqual((await library(a)).layouts.map((l) => l.name), ['FOH', 'Monitors']);
 });

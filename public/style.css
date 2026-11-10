@@ -1719,3 +1719,71 @@ body.view-log #devicesContainer {
   cursor: pointer;
   padding: 0;
 }
+
+/* Saved-layout bar at the top of the Custom tab */
+.layout-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background-color: var(--bg-strip);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.layout-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.layout-select {
+  background-color: #1a1e29;
+  color: var(--text-main);
+  border: 1px solid var(--border-active);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.layout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.layout-actions .btn {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.layout-sep {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-subtle);
+  margin: 0 2px;
+}
+
+.layout-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 600px) {
+  .layout-select {
+    flex: 1 1 100%;
+  }
+  .layout-hint,
+  .layout-sep {
+    display: none;
+  }
+}

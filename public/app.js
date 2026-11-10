@@ -5,7 +5,8 @@
  *   hello   { version, boundIp, name, interfaces[] }
  *   devices [ device structure … ]            (sent when anything changes)
  *   meters  { t, d: { ip: { tx:[byte|null], rx:[byte|null], mirrored? } } }  (20 Hz)
- *   custom_layout { devices: [{ name, tx:[ch], rx:[ch] }] }  (the Custom tab, shared by all screens)
+ *   custom_layouts { layouts: [{ name, devices: [{ name, tx:[ch], rx:[ch] }] }] }  (saved Custom layouts)
+ *   layout_result { requestId, name }   custom_layout_error { requestId, message }
  */
 (function () {
   'use strict';
@@ -19,6 +20,9 @@
   const SEGMENTS = 36;
   const SCALE_MARKS = [0, -6, -12, -18, -24, -36, -48, -60];
   const COLLAPSED_KEY = 'dmb.collapsed.v2';
+  const ACTIVE_LAYOUT_KEY = 'dmb.customLayout.active.v1';
+  const DEFAULT_LAYOUT_NAME = 'Layout 1';
+  const MAX_IMPORT_BYTES = 1024 * 1024;
 
   const COLORS = {
     track: '#0a0c10',
@@ -37,7 +41,9 @@
   const state = {
     direction: 'tx',
     view: 'meters', // 'meters' | 'custom' | 'log'
-    customLayout: { devices: [] },
+    layouts: [], // saved Custom layouts (shared library on the bridge)
+    activeLayout: loadPref(ACTIVE_LAYOUT_KEY), // which one this screen shows
+    customLayout: { devices: [] }, // the active layout's channels
     selection: new Set(), // strip keys `${ip}|${dir}|${ch}` selected for the context menu
     selectionAnchor: null, // last clicked strip, for Shift-click ranges
     devices: new Map(), // ip -> device structure
@@ -66,6 +72,14 @@
     customEmpty: $('customEmpty'),
     customEmptyText: $('customEmptyText'),
     clearCustom: $('btnClearCustom'),
+    layoutSelect: $('layoutSelect'),
+    layoutNew: $('btnLayoutNew'),
+    layoutSaveAs: $('btnLayoutSaveAs'),
+    layoutRename: $('btnLayoutRename'),
+    layoutDelete: $('btnLayoutDelete'),
+    layoutExport: $('btnLayoutExport'),
+    layoutImport: $('btnLayoutImport'),
+    layoutImportFile: $('layoutImportFile'),
     menu: $('channelMenu'),
     toast: $('toast'),
     search: $('searchInput'),
@@ -95,6 +109,23 @@
     if (className) node.className = className;
     if (text !== undefined && text !== null) node.textContent = text;
     return node;
+  }
+
+  function loadPref(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function savePref(key, value) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      // storage unavailable; the choice just won't be remembered
+    }
   }
 
   function loadCollapsed() {
@@ -217,12 +248,16 @@
         if (state.view === 'custom') renderCustom();
         else renderDevices();
         break;
-      case 'custom_layout':
-        state.customLayout = msg.data && Array.isArray(msg.data.devices) ? msg.data : { devices: [] };
+      case 'custom_layouts':
+        state.layouts = msg.data && Array.isArray(msg.data.layouts) ? msg.data.layouts : [];
+        resolveActiveLayout();
         onCustomLayoutChanged();
         break;
+      case 'layout_result':
+        settleRequest(msg.data, null);
+        break;
       case 'custom_layout_error':
-        showToast(`Custom view not saved: ${msg.data && msg.data.message}`);
+        if (!settleRequest(msg.data, msg.data && msg.data.message)) showToast(`Layout not saved: ${msg.data && msg.data.message}`);
         break;
       case 'meters':
         state.meters = msg.d || {};
@@ -348,9 +383,9 @@
   els.clearCustom.addEventListener('click', () => {
     const count = customChannelCount();
     if (!count) return;
-    if (!window.confirm(`Remove all ${count} channels from the Custom view? This affects every screen showing this bridge.`)) return;
+    if (!window.confirm(`Remove all ${count} channels from the layout "${state.activeLayout}"? Other screens showing this layout will see the change.`)) return;
     setCustomLayout({ devices: [] });
-    showToast('Custom view cleared');
+    showToast(`Cleared "${state.activeLayout}"`);
   });
 
   els.resetPeaks.addEventListener('click', () => {
@@ -741,17 +776,189 @@
     return Boolean(entry && entry[dir] && entry[dir].includes(ch));
   }
 
+  const layoutLabel = () => `"${state.activeLayout || DEFAULT_LAYOUT_NAME}"`;
+
   function customChannelCount() {
     return state.customLayout.devices.reduce((n, d) => n + d.tx.length + d.rx.length, 0);
   }
 
-  /** Apply a layout locally right away and send it to the bridge to save and share. */
+  /**
+   * Apply a change to the layout this screen shows, right away, and send it to
+   * the bridge, which saves it and shares it with other screens. If no layout
+   * exists yet, the first change creates "Layout 1".
+   */
   function setCustomLayout(layout) {
     layout.devices = layout.devices.filter((d) => d.tx.length || d.rx.length);
-    state.customLayout = layout;
-    if (!send({ type: 'custom_layout_set', data: layout })) showToast('Not connected to the bridge; the change will be lost');
+    const name = state.activeLayout || DEFAULT_LAYOUT_NAME;
+    setActiveLayout(name);
+    const existing = state.layouts.find((l) => l.name === name);
+    if (existing) existing.devices = layout.devices;
+    else state.layouts.push({ name, devices: layout.devices });
+    state.customLayout = { devices: layout.devices };
+    if (!send({ type: 'layout_save', name, devices: layout.devices })) showToast('Not connected to the bridge; the change was not saved');
     onCustomLayoutChanged();
   }
+
+  // --- Saved layouts --------------------------------------------------------
+
+  function setActiveLayout(name) {
+    state.activeLayout = name;
+    savePref(ACTIVE_LAYOUT_KEY, name);
+  }
+
+  /** Point this screen at an existing layout (e.g. after another screen deleted ours). */
+  function resolveActiveLayout() {
+    let layout = state.layouts.find((l) => l.name === state.activeLayout);
+    if (!layout && state.layouts.length) {
+      layout = state.layouts[0];
+      setActiveLayout(layout.name);
+    }
+    state.customLayout = { devices: layout ? layout.devices : [] };
+  }
+
+  let requestSeq = 0;
+  const pendingRequests = new Map(); // requestId -> callback(error, name)
+
+  /** Send a layout operation; `done(error, name)` runs when the bridge answers. */
+  function layoutRequest(msg, done) {
+    const requestId = ++requestSeq;
+    if (!send({ ...msg, requestId })) {
+      showToast('Not connected to the bridge');
+      return;
+    }
+    pendingRequests.set(requestId, done);
+  }
+
+  function settleRequest(data, error) {
+    const done = data && pendingRequests.get(data.requestId);
+    if (!done) return false;
+    pendingRequests.delete(data.requestId);
+    done(error, data.name);
+    return true;
+  }
+
+  function switchLayout(name) {
+    setActiveLayout(name);
+    resolveActiveLayout();
+    clearSelection();
+    onCustomLayoutChanged();
+  }
+
+  function askLayoutName(question, suggestion) {
+    const answer = window.prompt(question, suggestion);
+    if (answer === null) return null;
+    const name = answer.replace(/\s+/g, ' ').trim();
+    if (!name) {
+      showToast('A layout needs a name');
+      return null;
+    }
+    return name;
+  }
+
+  function suggestedName(base) {
+    const taken = new Set(state.layouts.map((l) => l.name.toLowerCase()));
+    if (!taken.has(base.toLowerCase())) return base;
+    for (let i = 2; ; i++) if (!taken.has(`${base} ${i}`.toLowerCase())) return `${base} ${i}`;
+  }
+
+  function renderLayoutBar() {
+    const select = els.layoutSelect;
+    select.textContent = '';
+    if (!state.layouts.length) {
+      const opt = el('option', null, `${DEFAULT_LAYOUT_NAME} (empty)`);
+      opt.value = '';
+      select.appendChild(opt);
+    }
+    for (const layout of state.layouts) {
+      const count = layout.devices.reduce((n, d) => n + d.tx.length + d.rx.length, 0);
+      const opt = el('option', null, `${layout.name} (${count} ch)`);
+      opt.value = layout.name;
+      select.appendChild(opt);
+    }
+    select.value = state.layouts.some((l) => l.name === state.activeLayout) ? state.activeLayout : select.options[0].value;
+    const saved = state.layouts.some((l) => l.name === state.activeLayout);
+    els.layoutRename.disabled = !saved;
+    els.layoutDelete.disabled = !saved;
+    els.layoutExport.disabled = !saved || customChannelCount() === 0;
+    els.layoutSaveAs.disabled = customChannelCount() === 0;
+  }
+
+  els.layoutSelect.addEventListener('change', () => {
+    if (els.layoutSelect.value) switchLayout(els.layoutSelect.value);
+  });
+
+  els.layoutNew.addEventListener('click', () => {
+    const name = askLayoutName('Name for the new layout:', suggestedName('Layout'));
+    if (!name) return;
+    layoutRequest({ type: 'layout_create', name, devices: [] }, (error, created) => {
+      if (error) return showToast(`Could not create the layout: ${error}`);
+      switchLayout(created);
+      showToast(`Created "${created}". Right-click meters in the Transmitter or Receiver tab to add channels.`);
+    });
+  });
+
+  els.layoutSaveAs.addEventListener('click', () => {
+    const name = askLayoutName('Save a copy of this layout as:', suggestedName(`${state.activeLayout || DEFAULT_LAYOUT_NAME} copy`));
+    if (!name) return;
+    layoutRequest({ type: 'layout_create', name, devices: state.customLayout.devices }, (error, created) => {
+      if (error) return showToast(`Could not save the layout: ${error}`);
+      switchLayout(created);
+      showToast(`Saved as "${created}"`);
+    });
+  });
+
+  els.layoutRename.addEventListener('click', () => {
+    const from = state.activeLayout;
+    const to = askLayoutName(`Rename "${from}" to:`, from);
+    if (!to || to === from) return;
+    layoutRequest({ type: 'layout_rename', from, to }, (error, renamed) => {
+      if (error) return showToast(`Could not rename: ${error}`);
+      switchLayout(renamed);
+      showToast(`Renamed to "${renamed}"`);
+    });
+  });
+
+  els.layoutDelete.addEventListener('click', () => {
+    const name = state.activeLayout;
+    if (!window.confirm(`Delete the layout "${name}"? It is removed for every screen using this bridge. Export it first if you may want it back.`)) return;
+    layoutRequest({ type: 'layout_delete', name }, (error) => {
+      if (error) return showToast(`Could not delete: ${error}`);
+      setActiveLayout(null);
+      switchLayout(state.layouts[0] ? state.layouts[0].name : null);
+      showToast(`Deleted "${name}"`);
+    });
+  });
+
+  els.layoutExport.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.href = `/api/custom-layouts/export?name=${encodeURIComponent(state.activeLayout)}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+
+  els.layoutImport.addEventListener('click', () => els.layoutImportFile.click());
+  els.layoutImportFile.addEventListener('change', () => {
+    const file = els.layoutImportFile.files && els.layoutImportFile.files[0];
+    els.layoutImportFile.value = '';
+    if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) return showToast('That file is too large to be a layout');
+    file.text().then((text) => {
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return showToast(`"${file.name}" is not a layout file`);
+      }
+      if (data && data.name === undefined) data.name = file.name.replace(/(\.dante-layout)?\.json$/i, '');
+      layoutRequest({ type: 'layout_import', data }, (error, created) => {
+        if (error) return showToast(`Could not import "${file.name}": ${error}`);
+        switchLayout(created);
+        showToast(`Imported "${created}"`);
+      });
+    });
+  });
 
   function changeCustomChannels(name, dir, channels, add) {
     const layout = { devices: state.customLayout.devices.map((d) => ({ name: d.name, tx: [...d.tx], rx: [...d.rx] })) };
@@ -781,10 +988,11 @@
   }
 
   function onCustomLayoutChanged() {
+    renderLayoutBar();
     const count = customChannelCount();
     els.tabCustomCount.hidden = count === 0;
     els.tabCustomCount.textContent = String(count);
-    els.tabCustom.title = `Custom: ${count} channel${count === 1 ? '' : 's'}. Right-click (or long-press) any meter to add it.`;
+    els.tabCustom.title = `Custom${state.activeLayout ? ` — ${state.activeLayout}` : ''}: ${count} channel${count === 1 ? '' : 's'}. Right-click (or long-press) any meter to add it.`;
     if (state.view === 'custom') renderCustom();
     else if (state.view === 'meters') refreshStripMarks();
   }
@@ -959,7 +1167,7 @@
           let added = 0;
           for (const g of groups) added += changeCustomChannels(g.name, g.dir, g.channels, true);
           clearSelection();
-          showToast(`Added ${channelWord(added)} to Custom`, { action: 'Open Custom', onAction: () => setView('custom') });
+          showToast(`Added ${channelWord(added)} to ${layoutLabel()}`, { action: 'Open Custom', onAction: () => setView('custom') });
         });
       }
       if (inCustom.length) {
@@ -967,7 +1175,7 @@
           let removed = 0;
           for (const g of groups) removed += changeCustomChannels(g.name, g.dir, g.channels, false);
           clearSelection();
-          showToast(`Removed ${channelWord(removed)} from Custom`);
+          showToast(`Removed ${channelWord(removed)} from ${layoutLabel()}`);
         }, { danger: true });
       }
       if (dev) {
@@ -977,7 +1185,7 @@
           const all = Array.from({ length: block.count }, (_, i) => i + 1);
           const added = changeCustomChannels(dev.name, strip.dir, all, true);
           clearSelection();
-          showToast(added ? `Added ${channelWord(added)} to Custom` : 'Already in Custom', { action: 'Open Custom', onAction: () => setView('custom') });
+          showToast(added ? `Added ${channelWord(added)} to ${layoutLabel()}` : `Already in ${layoutLabel()}`, { action: 'Open Custom', onAction: () => setView('custom') });
         }, { disabled: !block.count });
       }
       if (customChannelCount()) item('Open Custom tab', () => setView('custom'));
@@ -986,13 +1194,13 @@
         let removed = 0;
         for (const g of groups) removed += changeCustomChannels(g.name, g.dir, g.channels, false);
         clearSelection();
-        showToast(`Removed ${channelWord(removed)} from Custom`);
+        showToast(`Removed ${channelWord(removed)} from ${layoutLabel()}`);
       }, { danger: true });
       if (devName) {
         item(`Remove ${devName} from Custom`, () => {
           removeCustomDevice(devName);
           clearSelection();
-          showToast(`Removed ${devName} from Custom`);
+          showToast(`Removed ${devName} from ${layoutLabel()}`);
         }, { danger: true });
       }
       if (dev && strips.length === 1) {
@@ -1117,7 +1325,7 @@
         remove.addEventListener('click', (e) => {
           e.stopPropagation();
           removeCustomDevice(entry.name);
-          showToast(`Removed ${entry.name} from Custom`);
+          showToast(`Removed ${entry.name} from ${layoutLabel()}`);
         });
         view.headerRight.appendChild(remove);
         customCards.set(entry.name, view);

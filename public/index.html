@@ -90,8 +90,8 @@
         </svg>
         <input type="text" id="searchInput" placeholder="Filter devices or channels..." autocomplete="off">
       </div>
-      <button class="btn btn-secondary" id="btnClearCustom" hidden title="Remove every channel from the Custom tab">
-        Clear Custom
+      <button class="btn btn-secondary" id="btnClearCustom" hidden title="Remove every channel from the layout shown in the Custom tab">
+        Clear Layout
       </button>
       <button class="btn btn-secondary" id="btnRefresh" title="Refresh network discovery and remove offline devices">
         <span class="btn-icon">↻</span> Refresh Devices
@@ -119,6 +119,21 @@
 
   <!-- Custom tab: hand-picked channels grouped by device -->
   <main class="main-container" id="customContainer" hidden>
+    <div class="layout-bar" id="layoutBar">
+      <label class="layout-label" for="layoutSelect">Layout</label>
+      <select id="layoutSelect" class="layout-select" title="Choose which saved layout this screen shows"></select>
+      <div class="layout-actions">
+        <button class="btn btn-secondary" id="btnLayoutNew" title="Start a new, empty layout">New</button>
+        <button class="btn btn-secondary" id="btnLayoutSaveAs" title="Save a copy of this layout under a new name">Save As…</button>
+        <button class="btn btn-secondary" id="btnLayoutRename" title="Rename this layout">Rename</button>
+        <button class="btn btn-secondary" id="btnLayoutDelete" title="Delete this layout (for every screen)">Delete</button>
+        <span class="layout-sep" aria-hidden="true"></span>
+        <button class="btn btn-secondary" id="btnLayoutExport" title="Download this layout as a file (backup, or to load on another computer)">Export</button>
+        <button class="btn btn-secondary" id="btnLayoutImport" title="Load a layout file as a new layout">Import</button>
+        <input type="file" id="layoutImportFile" accept=".json,application/json" hidden>
+      </div>
+      <span class="layout-hint" id="layoutHint">Changes save automatically</span>
+    </div>
     <div class="empty-state custom-empty" id="customEmpty">
       <div class="custom-empty-icon">◆</div>
       <p id="customEmptyText">No channels in your Custom view yet.</p>

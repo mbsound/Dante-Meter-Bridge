@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.0
+
+### Saved Custom layouts
+- Save any number of named Custom layouts and switch between them from the **Layout** menu at the top of the Custom tab. **New**, **Save As…**, **Rename** and **Delete**; changes save automatically to the layout you're viewing.
+- Layouts are stored on the bridge and available to every screen; each screen remembers which layout it shows, so switching on one screen doesn't change another.
+- **Export** downloads a layout as a `.dante-layout.json` file and **Import** loads one as a new layout, for backups or moving layouts to another computer.
+- An existing 2.2.0 Custom layout is kept automatically as "Layout 1".
+- `GET /api/custom-layouts` lists them (replaces `/api/custom-layout`); `GET /api/custom-layouts/export?name=` downloads one.
+- The toolbar's **Clear Custom** is now **Clear Layout**.
+
+### Fixes
+- Narrow screens (phones, iPad portrait) no longer scroll sideways: the toolbar and device headers wrap.
+
 ## 2.2.0
 
 ### Custom tab
