@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.0
+
+### Status for other tools
+- New `GET /api/network-status`: a compact, read-only summary for outside tools to poll every minute or two. One entry per device by name, with online / offline and since when, primary and secondary status, sync and clock leader. Devices that drop off stay listed as offline.
+- It can be read by scripts on other web pages; every other endpoint keeps its existing restrictions. Polling it adds no traffic to the Dante network.
+
 ## 2.3.1
 
 ### Devices online

@@ -177,6 +177,7 @@ Receivers without their own meters show the level of the transmitter channel the
 |---|---|
 | `GET /api/devices` | All devices with structure and current levels. `levels.tx.peak` / `levels.rx.peak` are raw Dante level bytes (`null` = no recent data). `dbfs` holds the same levels in dBFS (`null` = silent or no data). |
 | `GET /api/status` | Health: version, uptime, bound interface, device counts, connected clients |
+| `GET /api/network-status` | Compact per-device summary for outside tools to poll: name, online, since when, and primary / secondary status. Readable from other web pages. See [Status for other tools](#status-for-other-tools) |
 | `GET /api/interfaces` | Available network interfaces |
 | `POST /api/interface` | Switch interface: `{"ip": "169.254.x.x"}` or `{"ip": "all"}` |
 | `POST /api/refresh` | Drop offline devices and re-poll the network |
@@ -186,6 +187,37 @@ Receivers without their own meters show the level of the transmitter channel the
 | `POST /api/events/clear` | Clear the in-memory event list (files are kept) |
 | `GET /api/custom-layouts` | Saved Custom layouts: `{"layouts": [{"name", "devices": [{"name", "tx": [channel numbers], "rx": [...]}]}]}` |
 | `GET /api/custom-layouts/export?name=` | Download one layout as a file that **Import** accepts |
+
+### Status for other tools
+
+`GET /api/network-status` is a small summary meant to be polled every minute or two by something outside the bridge, such as a status board or a spreadsheet script. Answering it reads only what the bridge already holds in memory; it sends nothing to the Dante network.
+
+```json
+{
+  "bridge": { "version": "2.4.0", "uptimeSec": 5400 },
+  "generatedAt": "2026-01-01T12:00:00.000Z",
+  "interface": { "name": "en7", "address": "169.254.10.20" },
+  "summary": { "devices": 2, "online": 1, "offline": 1 },
+  "devices": [
+    {
+      "name": "Stagebox-1",
+      "online": true,
+      "since": "2026-01-01T10:30:00.000Z",
+      "lastSeen": "2026-01-01T11:59:59.000Z",
+      "primary": { "status": "up", "ip": "169.254.1.10", "sync": "good", "clockLeader": false },
+      "secondary": { "status": "up", "ip": "172.31.1.10", "sync": "good", "clockLeader": false }
+    }
+  ]
+}
+```
+
+- `online` / `primary.status` (`up`, `down`): whether the device is answering on the primary network. `since` is when it last came online, or, if offline, when it was last heard from.
+- `secondary.status`: `up` or `down` as the device itself reports its secondary link. For devices that don't report it, `up` when the secondary port is following another device's clock (so the link works). Otherwise `unknown` (also while the device is offline), or `none` if it has no secondary port. `secondary.clockLeader: true` on a device other than the primary leader usually means its secondary port is cut off from the rest. The bridge only talks to devices on the primary network.
+- `sync`: `good`, `syncing`, `error`, `none` (not reported) or `unsupported`.
+- A device that drops off stays in the list as offline until it returns, the bridge restarts, the interface changes, or someone presses Refresh.
+- `interface` is the network the bridge is watching. If it is `null` or not your Dante interface, an empty device list means the bridge has lost the Dante network, not that every device is down.
+
+This endpoint (and only this one) can be read by scripts on other web pages. A page served over HTTPS may still be blocked by the browser from calling a plain `http://` address; if so, run the script outside the browser or poll from a server on the same network.
 
 ---
 

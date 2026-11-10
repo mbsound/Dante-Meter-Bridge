@@ -135,6 +135,7 @@ function fakeEngine() {
     getMeterFrame: () => ({}),
     interfaceInfo: () => ({ boundIp: null, name: 'All Interfaces' }),
     selectInterface: () => ({}),
+    getNetworkStatus: () => ({ summary: { devices: 0, online: 0, offline: 0 }, devices: [] }),
     refresh() {}
   });
   return engine;
@@ -347,6 +348,17 @@ test('renames are announced so other screens follow; state changes from another 
   const get = (headers) => fetch(`http://127.0.0.1:${port}/api/refresh`, { headers }).then((r) => r.status);
   assert.equal(await get({ 'Sec-Fetch-Site': 'cross-site' }), 403, 'an <img> on another site');
   assert.equal(await fetch(`http://127.0.0.1:${port}/api/status`, { headers: { Origin: 'http://evil.example' } }).then((r) => r.status), 200, 'reads stay open');
+
+  // The status summary is the one endpoint other web pages may read.
+  const status = await fetch(`http://127.0.0.1:${port}/api/network-status`, { headers: { Origin: 'https://example.com' } });
+  assert.equal(status.status, 200);
+  assert.equal(status.headers.get('access-control-allow-origin'), '*');
+  assert.deepEqual((await status.json()).summary, { devices: 0, online: 0, offline: 0 });
+  const preflight = await fetch(`http://127.0.0.1:${port}/api/network-status`, { method: 'OPTIONS', headers: { Origin: 'https://example.com', 'Access-Control-Request-Private-Network': 'true' } });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('access-control-allow-private-network'), 'true');
+  assert.equal(await fetch(`http://127.0.0.1:${port}/api/network-status`, { method: 'POST', headers: { Origin: 'https://example.com' } }).then((r) => r.status), 403);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/status`, { headers: { Origin: 'https://example.com' } })).headers.get('access-control-allow-origin'), null, 'nothing else is opened up');
 
   const bad = await fetch(`http://127.0.0.1:${port}/api/interface`, { method: 'POST', body: 'null' });
   assert.equal(bad.status, 400);

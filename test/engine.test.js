@@ -716,3 +716,47 @@ test('modern inventory paging continues past pages that hold no audio channels',
   engine.handleChannelStatusPage(dev, page([5, 6]));
   assert.deepEqual(sent, [[1, 3], [1, 5], [1, 7]]);
 });
+
+test('network status: per-device summary by name, and devices that drop off stay listed as offline', () => {
+  const engine = makeEngine();
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.10'));
+  engine.handleArc(nameReply('Stagebox-2'), from('169.254.1.11'));
+  engine.handleArc(countsReply(1, 1), from('169.254.1.12')); // no name yet: not listed
+  const one = engine.devices.get('169.254.1.10');
+  Object.assign(one, { numPorts: 2, secondaryLinkUp: true, secondaryIp: '172.31.1.10' });
+  Object.assign(engine.devices.get('169.254.1.11'), { numPorts: 1 });
+
+  let status = engine.getNetworkStatus();
+  assert.deepEqual(status.summary, { devices: 2, online: 2, offline: 0 });
+  assert.deepEqual(status.devices.map((d) => d.name), ['Stagebox-1', 'Stagebox-2']);
+  assert.equal(status.devices[0].primary.status, 'up');
+  assert.deepEqual([status.devices[0].secondary.status, status.devices[0].secondary.ip], ['up', '172.31.1.10']);
+  assert.equal(status.devices[1].secondary.status, 'none');
+  one.secondaryLinkUp = false;
+  assert.equal(engine.getNetworkStatus().devices[0].secondary.status, 'down');
+  // No link report at all: inferred from the secondary port's clock state.
+  one.secondaryLinkUp = null;
+  assert.equal(engine.getNetworkStatus().devices[0].secondary.status, 'unknown');
+  one.clock = { servo: 3, numPorts: 2, portStates: [9, 7] };
+  assert.equal(engine.getNetworkStatus().devices[0].secondary.status, 'up');
+  one.clock = { servo: 3, numPorts: 2, portStates: [9, 6] };
+  assert.equal(engine.getNetworkStatus().devices[0].secondary.status, 'unknown', 'leading on its own proves nothing about the link');
+
+  // Offline, then removed by the engine: still reported, as offline since it was last heard.
+  const lastSeen = Date.now() - TIMING.REMOVE_AFTER - 1;
+  one.lastSeen = lastSeen;
+  assert.deepEqual([engine.getNetworkStatus().devices[0].online, engine.getNetworkStatus().devices[0].secondary.status], [false, 'unknown']);
+  engine.iface = null;
+  engine.sendMdnsQueries = () => {};
+  engine.probeArp = () => {};
+  engine.discoveryTick();
+  assert.equal(engine.devices.has('169.254.1.10'), false);
+  status = engine.getNetworkStatus();
+  const gone = status.devices.find((d) => d.name === 'Stagebox-1');
+  assert.deepEqual([gone.online, gone.primary.status, gone.since], [false, 'down', new Date(lastSeen).toISOString()]);
+
+  // It returns (on a new address): listed once, online.
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.50'));
+  status = engine.getNetworkStatus();
+  assert.deepEqual(status.devices.filter((d) => d.name === 'Stagebox-1').map((d) => [d.online, d.primary.ip]), [[true, '169.254.1.50']]);
+});
