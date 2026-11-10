@@ -291,3 +291,80 @@ test('saved layouts: changes from one screen are stored and pushed to every scre
   assert.equal(error.data.requestId, 6);
   assert.deepEqual((await library(a)).layouts.map((l) => l.name), ['FOH', 'Monitors']);
 });
+
+test('long names: create never returns a name that does not exist or overwrites another layout', () => {
+  const lib = new CustomLayouts();
+  const long = `${'a'.repeat(42)} bcdef`; // a space lands where the name is cut
+  const names = [lib.create(long, [{ name: 'A', tx: [1] }]), lib.create(long, [{ name: 'B', tx: [1] }]), lib.create(long, [{ name: 'C', tx: [1] }])];
+  assert.equal(new Set(names).size, 3);
+  assert.equal(lib.get().layouts.length, 3);
+  for (const n of names) assert.ok(lib.find(n), n);
+  assert.deepEqual(names.map((n) => lib.find(n).devices[0].name), ['A', 'B', 'C']);
+});
+
+test('one invalid layout in the file does not cost the others, and an unreadable file is kept as a copy', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dmb-layout-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'custom-layout.json');
+  fs.writeFileSync(file, JSON.stringify({ version: 2, layouts: [{ name: 'Good', devices: [{ name: 'A', tx: [1] }] }, { name: 'Bad', devices: [{ name: 'A', tx: ['x'] }] }] }));
+  const warnings = [];
+  const lib = new CustomLayouts({ file, log: { warn: (m) => warnings.push(m) } }).load();
+  assert.deepEqual(lib.get().layouts.map((l) => l.name), ['Good']);
+  assert.equal(warnings.length, 1);
+
+  fs.writeFileSync(file, '{ not json');
+  new CustomLayouts({ file, log: { warn() {} } }).load();
+  assert.equal(fs.readFileSync(`${file}.unreadable`, 'utf8'), '{ not json');
+});
+
+test('a layout that cannot be written to disk is reported, not shown as saved', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dmb-layout-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const blocker = path.join(dir, 'not-a-folder');
+  fs.writeFileSync(blocker, '');
+  const lib = new CustomLayouts({ file: path.join(blocker, 'custom-layout.json'), log: { warn() {} } });
+  assert.throws(() => lib.save('FOH', [{ name: 'A', tx: [1] }]), /could not be written to disk/);
+  assert.ok(lib.find('FOH'), 'still usable until the bridge restarts');
+});
+
+test('renames are announced so other screens follow; state changes from another website are refused', async (t) => {
+  const customLayouts = new CustomLayouts();
+  const web = createWebServer({ engine: fakeEngine(), customLayouts, version: 'test', log: { info() {}, warn() {}, error() {} } });
+  await new Promise((resolve) => web.server.listen(0, '127.0.0.1', resolve));
+  t.after(() => web.close());
+  const { port } = web.server.address();
+
+  const renamed = [];
+  customLayouts.on('renamed', (from, to) => renamed.push([from, to]));
+  customLayouts.create('FOH', []);
+  customLayouts.rename('FOH', 'FOH v2');
+  assert.deepEqual(renamed, [['FOH', 'FOH v2']]);
+
+  const post = (headers) => fetch(`http://127.0.0.1:${port}/api/events/clear`, { method: 'POST', headers }).then((r) => r.status);
+  assert.equal(await post({}), 200, 'non-browser clients (e.g. Companion)');
+  assert.equal(await post({ Origin: `http://127.0.0.1:${port}` }), 200, 'the bridge\'s own pages');
+  assert.equal(await post({ Origin: 'http://evil.example' }), 403);
+  const get = (headers) => fetch(`http://127.0.0.1:${port}/api/refresh`, { headers }).then((r) => r.status);
+  assert.equal(await get({ 'Sec-Fetch-Site': 'cross-site' }), 403, 'an <img> on another site');
+  assert.equal(await fetch(`http://127.0.0.1:${port}/api/status`, { headers: { Origin: 'http://evil.example' } }).then((r) => r.status), 200, 'reads stay open');
+
+  const bad = await fetch(`http://127.0.0.1:${port}/api/interface`, { method: 'POST', body: 'null' });
+  assert.equal(bad.status, 400);
+});
+
+test('a rejected WebSocket upgrade that is then reset does not crash the bridge', async (t) => {
+  const web = createWebServer({ engine: fakeEngine(), customLayouts: new CustomLayouts(), version: 'test', log: { info() {}, warn() {}, error() {} } });
+  await new Promise((resolve) => web.server.listen(0, '127.0.0.1', resolve));
+  t.after(() => web.close());
+  const { port } = web.server.address();
+  let serverSocket;
+  web.server.prependListener('upgrade', (req, socket) => (serverSocket = socket));
+  const net = require('net');
+  const sock = net.connect(port, '127.0.0.1');
+  await new Promise((resolve) => sock.once('connect', resolve));
+  sock.write('GET /nope HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+  await new Promise((resolve) => sock.once('data', resolve));
+  assert.ok(serverSocket.listenerCount('error') > 0, 'an error on the rejected socket is handled');
+  serverSocket.emit('error', Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+  sock.destroy();
+});

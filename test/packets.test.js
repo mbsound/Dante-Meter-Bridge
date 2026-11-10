@@ -267,6 +267,24 @@ function clockReply({ revision = 0x0726, state = 3, servo = 3, uuid = '000edd000
   return Buffer.concat([header, payload]);
 }
 
+test('clock status: per-port PTP state separates primary and secondary leaders', () => {
+  // Captured layout: port count, extension offset, then 4 bytes per port.
+  const build = (states) => {
+    const buf = clockReply({ ports: states.length });
+    const payload = buf.subarray(24);
+    const ext = 0x30 + states.length * 4;
+    const out = Buffer.concat([buf.subarray(0, 24), payload.subarray(0, 0x30), Buffer.alloc(states.length * 4), payload.subarray(0x30)]);
+    states.forEach((s, i) => out.writeUInt16BE(s, 24 + 0x30 + i * 4));
+    out.writeUInt16BE(ext, 24 + 0x2e);
+    return packets.parseSettingsReply(out).clock;
+  };
+  assert.deepEqual(build([9, 7]).portStates, [9, 7], 'follower');
+  assert.deepEqual(build([6, 6]).portStates, [6, 6], 'leader on both networks');
+  assert.deepEqual(build([9, 6]).portStates, [9, 6], 'leader on the secondary network only');
+  assert.deepEqual(build([9]).portStates, [9], 'single-port device');
+  assert.equal(build([9, 6]).muteFlags, 0, 'extension is still found after the port records');
+});
+
 test('clock status: identities, port count, drift limit and mute flags', () => {
   const { clock } = packets.parseSettingsReply(clockReply({ mute: 1 | 16 }));
   assert.equal(clock.revision, 0x0726);

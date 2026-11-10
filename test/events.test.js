@@ -152,8 +152,68 @@ test('clock leader: first sight, change, and multiple leaders', () => {
   h.snap.leaders = ['Console'];
   assert.deepEqual(types(h.tick()), ['leader_elevated', 'leader_demoted']);
   h.snap.leaders = ['Console', 'Stagebox-1'];
-  assert.deepEqual(types(h.tick()), ['leader_elevated', 'multiple_leaders']);
+  assert.deepEqual(types(h.tick()), ['leader_elevated']);
+  const [multi] = h.tick(5000);
+  assert.equal(multi.type, 'multiple_leaders', 'logged once the conflict has lasted');
+  assert.equal(multi.severity, 'error');
+  assert.match(multi.message, /primary network: Console, Stagebox-1/);
   assert.deepEqual(h.tick(), []);
+});
+
+test('multiple secondary leaders are a warning, separate from the primary error', () => {
+  const h = harness([device()], ['Console']);
+  h.snap.secondaryLeaders = ['Console'];
+  h.tick();
+  h.snap.secondaryLeaders = ['Console', 'Plate-2', 'Plate-1'];
+  assert.deepEqual(h.tick(), [], 'not until it has lasted');
+  const [warn] = h.tick(5000);
+  assert.equal(warn.type, 'multiple_secondary_leaders');
+  assert.equal(warn.severity, 'warning');
+  assert.match(warn.message, /secondary network: Console, Plate-1, Plate-2\./);
+  assert.deepEqual(h.tick(60000), [], 'logged once while nothing changes');
+  h.snap.secondaryLeaders = ['Console', 'Plate-1'];
+  h.tick();
+  assert.deepEqual(types(h.tick(5000)), ['multiple_secondary_leaders'], 'logged again when the set changes');
+  h.snap.secondaryLeaders = ['Console'];
+  assert.deepEqual(h.tick(), []);
+  assert.equal(h.eventLog.events.filter((e) => e.type === 'multiple_leaders').length, 0);
+});
+
+test('a device that briefly claims leadership as it rejoins is not a multiple-leader error', () => {
+  const h = harness([device()], ['Console']);
+  h.tick();
+  h.snap.leaders = ['Console', 'Stagebox-1'];
+  assert.deepEqual(types(h.tick()), ['leader_elevated']);
+  h.tick();
+  h.snap.leaders = ['Console'];
+  assert.deepEqual(types(h.tick()), ['leader_demoted']);
+  assert.deepEqual(h.tick(10000), []);
+});
+
+test('coming back online does not also log a response timeout for the time it was away', () => {
+  const dev = device({ lastArcReplyAt: 1000000 });
+  const h = harness([dev]);
+  h.tick();
+  dev.online = false;
+  assert.deepEqual(types(h.tick()), ['device_offline']);
+  dev.online = true;
+  assert.deepEqual(types(h.tick(40000)), ['device_online']);
+  assert.deepEqual(h.tick(), [], 'still within the timeout since it returned');
+  assert.deepEqual(types(h.tick(12000)), ['response_timeout'], 'but a device that stays silent is still reported');
+});
+
+test('online and offline events never change how many devices are tracked as online', () => {
+  const devs = [device(), device({ ip: '169.254.1.11', name: 'Stagebox-2' })];
+  const h = harness(devs);
+  h.tick();
+  for (let i = 0; i < 5; i++) {
+    devs[0].online = false;
+    h.tick();
+    devs[0].online = true;
+    h.tick();
+  }
+  assert.equal(h.eventLog.events.filter((e) => e.type === 'device_online').length, 7);
+  assert.equal([...h.monitor.devices.values()].filter((d) => d.online).length, 2);
 });
 
 function rx(number, overrides) {
@@ -232,8 +292,8 @@ test('response timeout while still on the network, then recovery', () => {
   const dev = device({ lastArcReplyAt: 1000000 });
   const h = harness([dev]);
   h.tick();
-  assert.deepEqual(types(h.tick(11000)), ['response_timeout']);
-  dev.lastArcReplyAt = 1013000;
+  assert.deepEqual(types(h.tick(12000)), ['response_timeout']);
+  dev.lastArcReplyAt = 1014000;
   assert.deepEqual(types(h.tick()), ['response_restored']);
 });
 
@@ -288,4 +348,62 @@ test('Rx channels reported for the first time are not logged as routing changes'
   // A real change after that is still logged
   dev.rx = [{ number: 1, name: 'In 1', subscribedDevice: 'Desk', subscribedChannel: 'Out 2', status: 9 }];
   assert.deepEqual(types(h.tick()), ['routing_changed']);
+});
+
+test('a routing change that passes through "in progress" is still logged, with no false restore', () => {
+  const dev = device({ rx: [rx(1)] });
+  const h = harness([dev]);
+  h.tick();
+  dev.rx = [rx(1, { status: 8, subscribedDevice: 'Console', subscribedChannel: '07' })];
+  assert.deepEqual(h.tick(), [], 'nothing while it is being set up');
+  dev.rx = [rx(1, { subscribedDevice: 'Console', subscribedChannel: '07' })];
+  const [changed] = h.tick();
+  assert.equal(changed.type, 'routing_changed');
+  assert.equal(changed.message, 'channel 1 (In 1): now Console / 07 (was Mic-Rx / 01)');
+
+  // In error on one source, re-patched to another via "in progress": a change, not "connected again".
+  dev.rx = [rx(1, { status: 1, subscribedDevice: 'Console', subscribedChannel: '07' })];
+  h.tick();
+  dev.rx = [rx(1, { status: 8 })];
+  h.tick();
+  dev.rx = [rx(1)];
+  assert.deepEqual(types(h.tick()), ['routing_changed']);
+});
+
+test('renaming the clock leader is a rename, not a change of leader', () => {
+  const dev = device();
+  const h = harness([dev], ['Stagebox-1']);
+  h.tick();
+  dev.name = 'Stagebox-A';
+  h.snap.leaders = ['Stagebox-A'];
+  assert.deepEqual(types(h.tick()), ['device_renamed']);
+  assert.deepEqual(h.tick(), []);
+});
+
+test('a device that reappears on a new address is not then logged as offline at the old one', () => {
+  const old = device();
+  const h = harness([old]);
+  h.tick();
+  const moved = device({ ip: '169.254.1.99' });
+  h.snap.devices.push(moved);
+  h.tick();
+  old.online = false;
+  assert.deepEqual(types(h.tick()).filter((t) => t === 'device_offline'), []);
+  h.snap.devices.splice(0, 1); // engine drops the dead record
+  assert.deepEqual(h.tick(), []);
+  moved.online = false;
+  assert.deepEqual(types(h.tick()), ['device_offline'], 'a real outage is still reported');
+});
+
+test('event log survives its folder being removed while running', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dmb-log-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const logDir = path.join(dir, 'logs');
+  const log = new EventLog({ dir: logDir });
+  log.load();
+  fs.rmSync(logDir, { recursive: true, force: true });
+  assert.doesNotThrow(() => log.prune());
+  log.add('monitoring_started', { message: 'again' });
+  await log.flush();
+  assert.equal(fs.readdirSync(logDir).length, 1, 'folder recreated and the event written');
 });

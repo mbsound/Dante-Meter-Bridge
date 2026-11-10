@@ -184,10 +184,14 @@
   function findDeviceByName(name) {
     if (!name) return null;
     const wanted = name.trim().toLowerCase();
+    // A device that changed address can briefly be listed twice: prefer the live one.
+    let offline = null;
     for (const dev of state.devices.values()) {
-      if (dev.name.toLowerCase() === wanted || dev.ip === name) return dev;
+      if (dev.name.toLowerCase() !== wanted && dev.ip !== name) continue;
+      if (dev.online) return dev;
+      offline = offline || dev;
     }
-    return null;
+    return offline;
   }
 
   // ---------------------------------------------------------------------------
@@ -197,15 +201,26 @@
   let ws = null;
   let reconnectDelay = 1000;
 
+  // The bridge sends meters 20 times a second. Several seconds of silence on an
+  // "open" socket means the link is dead (cable pulled, Wi-Fi dropped): reconnect
+  // instead of showing frozen meters as live.
+  let lastMessageAt = 0;
+  const STALL_MS = 6000;
+  setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN && Date.now() - lastMessageAt > STALL_MS) ws.close();
+  }, 2000);
+
   function connect() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
     ws.onopen = () => {
+      lastMessageAt = Date.now();
       reconnectDelay = 1000;
       setStatus('live', 'Live');
     };
     ws.onmessage = (event) => {
+      lastMessageAt = Date.now();
       let msg;
       try {
         msg = JSON.parse(event.data);
@@ -216,6 +231,14 @@
     };
     ws.onclose = () => {
       setStatus('warning', 'Disconnected — reconnecting…');
+      updateOnlineCount(false);
+      // Don't leave the last levels on screen looking live.
+      state.meters = {};
+      state.clipUntil.clear();
+      for (const [id, done] of pendingRequests) {
+        pendingRequests.delete(id);
+        done('the connection to the bridge was lost before it answered');
+      }
       setTimeout(connect, reconnectDelay);
       reconnectDelay = Math.min(reconnectDelay * 2, 5000);
     };
@@ -227,6 +250,27 @@
       return true;
     }
     return false;
+  }
+
+  /**
+   * Header readout, visible on every tab: how many devices are on the network
+   * right now. `live = false` (no connection to the bridge) shows a dash rather
+   * than a number that may no longer be true.
+   */
+  function updateOnlineCount(live = true) {
+    const devs = [...state.devices.values()];
+    const offline = devs.filter((d) => !d.online).map((d) => d.name).sort((a, b) => a.localeCompare(b));
+    const wrap = $('onlineCount');
+    $('onlineCountValue').textContent = live ? String(devs.length - offline.length) : '–';
+    const note = $('onlineCountOffline');
+    note.hidden = !live || offline.length === 0;
+    note.textContent = ` (${offline.length} offline)`;
+    wrap.classList.toggle('has-offline', live && offline.length > 0);
+    wrap.title = !live
+      ? 'Not connected to the bridge'
+      : offline.length
+        ? `Devices on the network right now. Offline: ${offline.join(', ')}`
+        : 'Devices on the network right now';
   }
 
   function setStatus(kind, text) {
@@ -245,6 +289,7 @@
         break;
       case 'devices':
         state.devices = new Map(msg.data.map((d) => [d.ip, d]));
+        updateOnlineCount();
         if (state.view === 'custom') renderCustom();
         else renderDevices();
         break;
@@ -252,6 +297,10 @@
         state.layouts = msg.data && Array.isArray(msg.data.layouts) ? msg.data.layouts : [];
         resolveActiveLayout();
         onCustomLayoutChanged();
+        break;
+      case 'layout_renamed':
+        // Another screen renamed the layout this one shows: follow it.
+        if (msg.data && msg.data.from === state.activeLayout) setActiveLayout(msg.data.to);
         break;
       case 'layout_result':
         settleRequest(msg.data, null);
@@ -346,6 +395,7 @@
     updateTabs();
     if (view === 'meters') renderDevices();
     if (view === 'custom') renderCustom();
+    if (view === 'log') updateStats();
   }
 
   function setDirection(dir) {
@@ -578,9 +628,9 @@
     view.srBadge.textContent = formatSampleRate(dev.sampleRate);
 
     view.primaryDot.className = `sync-dot ${dev.primarySync}`;
-    view.primaryDot.title = `Primary network: ${SYNC_TITLES[dev.primarySync] || dev.primarySync}`;
+    view.primaryDot.title = `Primary network: ${SYNC_TITLES[dev.primarySync] || dev.primarySync}${dev.isClockLeader ? ' (clock leader on the primary network)' : ''}`;
     view.secondaryDot.className = `sync-dot ${dev.secondarySync}`;
-    view.secondaryDot.title = `Secondary network: ${SYNC_TITLES[dev.secondarySync] || dev.secondarySync}`;
+    view.secondaryDot.title = `Secondary network: ${SYNC_TITLES[dev.secondarySync] || dev.secondarySync}${dev.isSecondaryClockLeader ? ' (clock leader on the secondary network)' : ''}`;
 
     updateIdentity(view, dev);
   }
@@ -765,7 +815,8 @@
 
   const DIR_LABELS = { tx: 'Tx', rx: 'Rx' };
   const customCards = new Map(); // device name -> card view
-  const stripKey = (strip) => `${strip.context}|${strip.ip}|${strip.dir}|${strip.ch}`;
+  // Custom strips of a device that isn't on the network have no IP: key those by name.
+  const stripKey = (strip) => `${strip.context}|${strip.ip || `name:${strip.deviceName}`}|${strip.dir}|${strip.ch}`;
 
   function customEntry(name) {
     return state.customLayout.devices.find((d) => d.name === name) || null;
@@ -812,6 +863,9 @@
     if (!layout && state.layouts.length) {
       layout = state.layouts[0];
       setActiveLayout(layout.name);
+    } else if (!layout && state.activeLayout !== DEFAULT_LAYOUT_NAME) {
+      // Nothing saved any more: don't bring a deleted layout's name back on the next edit.
+      setActiveLayout(DEFAULT_LAYOUT_NAME);
     }
     state.customLayout = { devices: layout ? layout.devices : [] };
   }
@@ -951,13 +1005,14 @@
       } catch {
         return showToast(`"${file.name}" is not a layout file`);
       }
-      if (data && data.name === undefined) data.name = file.name.replace(/(\.dante-layout)?\.json$/i, '');
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return showToast(`"${file.name}" is not a layout file`);
+      if (data.name === undefined) data.name = file.name.replace(/(\.dante-layout)?\.json$/i, '');
       layoutRequest({ type: 'layout_import', data }, (error, created) => {
         if (error) return showToast(`Could not import "${file.name}": ${error}`);
         switchLayout(created);
         showToast(`Imported "${created}"`);
       });
-    });
+    }).catch(() => showToast(`Could not read "${file.name}"`));
   });
 
   function changeCustomChannels(name, dir, channels, add) {
@@ -1035,7 +1090,7 @@
     const key = stripKey(strip);
     if (range && state.selectionAnchor) {
       // Shift-click: every strip between the anchor and this one on the same card row.
-      const all = visibleStrips(strip.context).filter((s) => s.ip === strip.ip && s.dir === strip.dir);
+      const all = visibleStrips(strip.context).filter((s) => s.ip === strip.ip && s.deviceName === strip.deviceName && s.dir === strip.dir);
       const a = all.findIndex((s) => stripKey(s) === state.selectionAnchor);
       const b = all.indexOf(strip);
       if (a !== -1 && b !== -1) {
@@ -1140,7 +1195,7 @@
     const title =
       strips.length === 1
         ? `${chLabel} — ${devName || 'unknown device'}`
-        : `${channelWord(strips.length)} selected${groups.length > 1 ? ` on ${new Set(groups.map((g) => g.name)).size} devices` : ` — ${devName}`}`;
+        : `${channelWord(strips.length)} selected${new Set(groups.map((g) => g.name)).size > 1 ? ` on ${new Set(groups.map((g) => g.name)).size} devices` : ` — ${devName}`}`;
     menu.appendChild(el('div', 'context-menu-title', title));
 
     const item = (label, action, { danger = false, disabled = false } = {}) => {
@@ -1501,7 +1556,13 @@
     }
     const age = now - hold.at;
     if (age <= PEAK_HOLD_MS) return hold.norm;
-    return Math.max(norm, hold.norm - ((age - PEAK_HOLD_MS) / 1000) * PEAK_DECAY_PER_SEC);
+    const decayed = hold.norm - ((age - PEAK_HOLD_MS) / 1000) * PEAK_DECAY_PER_SEC;
+    if (decayed <= norm) {
+      // The old peak has fallen back to the signal: hold from here again.
+      state.holds.set(key, { norm, at: now });
+      return norm;
+    }
+    return decayed;
   }
 
   function renderMeters() {

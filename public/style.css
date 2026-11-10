@@ -43,6 +43,7 @@ body {
   font-size: 13px;
   line-height: 1.4;
   height: 100vh;
+  height: 100dvh; /* the visible area on phones, where browser bars cover part of 100vh */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -85,7 +86,8 @@ body {
 .network-status-line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 2px 6px;
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 1px;
@@ -117,6 +119,22 @@ body {
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
+}
+
+.online-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.online-count strong {
+  color: #66d98a;
+  font-variant-numeric: tabular-nums;
+}
+
+.online-count.has-offline strong,
+.online-count.has-offline span {
+  color: #ffb74d;
 }
 
 .nic-select-wrap label {

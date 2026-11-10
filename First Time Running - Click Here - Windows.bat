@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+pushd "%~dp0"
 title Dante Audio Meter Bridge - First Time Setup
 
 echo ========================================================

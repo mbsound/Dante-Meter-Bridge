@@ -120,6 +120,12 @@
     for (const s of state.meta.severities) els.severityChips.appendChild(chip('severity', s, SEVERITY_LABELS[s] || s, `sev-${s}`));
   }
 
+  /** The number on a chip counts log entries, never devices: say so. */
+  function setCount(btn, n) {
+    btn.lastChild.textContent = n;
+    btn.title = `${n.toLocaleString()} ${btn.firstChild.textContent} event${n === 1 ? '' : 's'} in the log. Click to filter.`;
+  }
+
   function updateChips() {
     const catCounts = {};
     const sevCounts = {};
@@ -131,13 +137,13 @@
       const on = state.categories.has(btn.dataset.id);
       btn.classList.toggle('active', on);
       btn.setAttribute('aria-pressed', String(on));
-      btn.lastChild.textContent = catCounts[btn.dataset.id] || 0;
+      setCount(btn, catCounts[btn.dataset.id] || 0);
     }
     for (const btn of els.severityChips.children) {
       const on = state.severities.has(btn.dataset.id);
       btn.classList.toggle('active', on);
       btn.setAttribute('aria-pressed', String(on));
-      btn.lastChild.textContent = sevCounts[btn.dataset.id] || 0;
+      setCount(btn, sevCounts[btn.dataset.id] || 0);
     }
     els.showAll.disabled = !state.categories.size && !state.severities.size && !state.search;
   }
@@ -251,6 +257,8 @@
       case 'events_cleared':
         state.events = [];
         state.lastRenderedId = 0;
+        state.unseenErrors = 0;
+        updateBadge();
         queueRender();
         break;
     }

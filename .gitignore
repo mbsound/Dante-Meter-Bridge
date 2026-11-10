@@ -37,3 +37,4 @@ logs/
 # Custom tab layout (contains site-specific device names)
 custom-layout.json
 custom-layout.json.tmp
+custom-layout.json.unreadable

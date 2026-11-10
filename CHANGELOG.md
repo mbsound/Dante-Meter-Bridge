@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.3.1
+
+### Devices online
+- The header now shows how many devices are on the network at this moment, next to the NIC selector, on every tab. If any are offline it shows how many, and the tooltip names them.
+
+### Clock leaders
+- Primary and secondary clock leaders are told apart, from the per-port clock state devices report. More than one leader on the primary network is still an error (**Multiple primary clock leaders**); more than one on the secondary network is a new warning (**Multiple secondary clock leaders**), which usually means a secondary port is unplugged or cut off from the rest.
+- Hovering a device's sync dots says whether it is the clock leader on that network.
+
+### Event Log
+- The filter buttons' numbers count log entries (a device that dropped and returned five times adds five to "Device Online"); each button's tooltip now says so.
+- A device coming back online no longer also logs "Response timeout … not answering queries" for the time it was away.
+- "Multiple clock leaders" is only logged when the conflict lasts 5 seconds. A device rejoining the network briefly elects itself leader, which is normal.
+- A device that has gone offline no longer counts as a clock leader from its last reply.
+- A subscription re-patched to a different source is now logged as a routing change even when it passes through "in progress" first, and is no longer reported as "connected again".
+- Renaming the clock leader is logged as a rename only, not as one device losing the clock and another taking it.
+- A device that returns on a new address is no longer logged as going offline at its old one, and its old entry is dropped straight away instead of lingering as an offline duplicate.
+- The log keeps working if its folder is deleted while the bridge runs (it used to stop saving and could crash at the next clean-up).
+- The Event Log tab's error badge clears when the list is cleared.
+
+### Meters and Custom tab
+- Peak hold works again after a channel's first loud peak (the hold marker used to disappear until Reset Peaks).
+- When the browser loses the bridge, meters go blank instead of freezing on their last levels, and a silent connection is detected and reconnected within a few seconds.
+- A screen showing a layout that another screen renames now follows the rename instead of jumping to a different layout.
+- Selecting channels of Custom devices that aren't on the network no longer selects the same channel number on every missing device.
+- If a layout can't be written to disk you are told, rather than it appearing saved and vanishing on restart. One invalid entry in `custom-layout.json` no longer discards the whole file, and an unreadable file is kept as `custom-layout.json.unreadable`.
+- Very long layout names can no longer cause a new layout to overwrite another.
+- Footer statistics are correct on the Event Log tab; the footer is no longer hidden behind the browser's bars on phones.
+
+### Network interfaces
+- An interface you chose is kept after it drops and returns, even when a link-local interface is also present.
+- Started with no network connected, the bridge now binds to the first interface that comes up instead of waiting for you to pick one.
+- After switching interface, late packets from the old network no longer re-add its devices.
+- Identity from an override or the Dante Controller database is cleared when the device is renamed away from it.
+- Channel listing no longer loops on devices with several pages of non-audio (video) channels.
+
+### Security and robustness
+- A dropped connection during a refused WebSocket handshake could crash the bridge. Fixed.
+- Requests that change the bridge (select interface, refresh, clear the log) are refused when they come from another website open in a browser. The bridge's own pages and non-browser clients such as Companion are unaffected.
+- `/api/events?limit=` ignores negative and fractional values; a malformed `POST /api/interface` body returns 400.
+- Windows launchers work from a network share.
+
 ## 2.3.0
 
 ### Saved Custom layouts

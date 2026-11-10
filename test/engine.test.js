@@ -201,6 +201,25 @@ test('clock leader only comes from real clock data (no guessing)', () => {
   assert.deepEqual(devs.map((d) => d.primarySync), ['good', 'good']);
 });
 
+test('secondary clock leaders come from the secondary port state, online devices only', () => {
+  const engine = makeEngine();
+  for (const ip of ['169.254.1.10', '169.254.1.11', '169.254.1.12']) engine.handleArc(countsReply(1, 1), from(ip));
+  const clock = (uuid, portStates) => ({ isMaster: uuid === 'aa', uuid, grandmasterUuid: 'aa', servo: 3, numPorts: 2, portStates });
+  engine.devices.get('169.254.1.10').clock = clock('aa', [6, 6]);
+  engine.devices.get('169.254.1.11').clock = clock('bb', [9, 7]);
+  engine.devices.get('169.254.1.12').clock = clock('cc', [9, 6]);
+  let devs = engine.getDevices();
+  assert.deepEqual(devs.map((d) => d.isClockLeader), [true, false, false]);
+  assert.deepEqual(devs.map((d) => d.isSecondaryClockLeader), [true, false, true]);
+  assert.deepEqual(engine.getMonitorSnapshot().secondaryLeaders.length, 2);
+
+  engine.devices.get('169.254.1.12').secondaryLinkUp = false;
+  assert.deepEqual(engine.getDevices().map((d) => d.isSecondaryClockLeader), [true, false, false], 'a port with no link is not a leader');
+  engine.devices.get('169.254.1.12').secondaryLinkUp = null;
+  engine.devices.get('169.254.1.12').lastSeen = Date.now() - 30000;
+  assert.deepEqual(engine.getDevices().map((d) => d.isSecondaryClockLeader), [true, false, false], 'nor is an offline device');
+});
+
 test('identity comes from local overrides, then the Dante Controller database', () => {
   const engine = makeEngine({
     overrides: { 'stagebox-1': { manufacturer: 'Override Co', modelName: 'Custom' } },
@@ -616,4 +635,84 @@ test('auto-selected non-Dante interface switches to a link-local one that appear
   } finally {
     h.restore();
   }
+});
+
+test('an interface the user chose is kept after it drops and returns, even with a Dante interface present', () => {
+  const dante = nic('en7', '169.254.1.1');
+  const h = nicHarness([office, dante]);
+  try {
+    h.engine.selectInterface('10.0.0.5');
+    h.set([dante]); // chosen interface unplugged
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5', 'en7']);
+    h.set([office, dante]);
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5', 'en7', 'en5'], 'back to the chosen interface');
+    h.engine.discoveryTick();
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5', 'en7', 'en5'], 'and it stays there');
+  } finally {
+    h.restore();
+  }
+});
+
+test('started with no network: binds to the first interface that comes up, whatever its addressing', () => {
+  const h = nicHarness([]);
+  try {
+    h.engine.autoSelected = true;
+    h.engine.iface = null;
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, []);
+    h.set([office]);
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, ['en5']);
+  } finally {
+    h.restore();
+  }
+});
+
+test('"All Interfaces" chosen in the UI is not replaced when an interface appears', () => {
+  const h = nicHarness([]);
+  try {
+    h.engine.selectInterface('all');
+    h.set([office]);
+    h.engine.discoveryTick();
+    assert.deepEqual(h.bound, [null], 'only the explicit choice, no automatic switch');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a device that comes back on a new address replaces its old record instead of being shadowed by it', () => {
+  const engine = makeEngine();
+  engine.handleArc(nameReply('Stagebox-1'), from('169.254.1.10'));
+  engine.devices.get('169.254.1.10').lastSeen = Date.now() - TIMING.OFFLINE_AFTER - 1;
+  engine.handleMdns(advert('Stagebox-1', { address: '169.254.1.60' }), { address: '169.254.1.60' });
+  assert.equal(engine.devices.get('169.254.1.60').name, 'Stagebox-1');
+  assert.equal(engine.devices.has('169.254.1.10'), false);
+  assert.deepEqual(engine.getDevices().map((d) => [d.name, d.online]), [['Stagebox-1', true]]);
+});
+
+test('identity from an override is dropped when the device is renamed away from it', () => {
+  const engine = makeEngine({ overrides: { 'Old-Name': { manufacturer: 'ACME', modelName: 'Box 8' } } });
+  engine.handleArc(nameReply('Old-Name'), from('169.254.1.10'));
+  const dev = engine.devices.get('169.254.1.10');
+  assert.equal(dev.modelName, 'Box 8');
+  engine.handleArc(nameReply('New-Name'), from('169.254.1.10'));
+  assert.equal(dev.name, 'New-Name');
+  assert.equal(dev.modelName, null);
+  assert.equal(dev.manufacturer, null);
+});
+
+test('modern inventory paging continues past pages that hold no audio channels', () => {
+  const engine = makeEngine();
+  engine.handleMdns(modernAdvert('AV-Box', '169.254.1.70'), { address: '169.254.1.70' });
+  const dev = engine.devices.get('169.254.1.70');
+  const sent = [];
+  engine.sendChannelStatusQuery = (d, rx, media, start) => sent.push([media, start]);
+  const page = (ids) => ({ commandId: 0x2400, ok: true, morePages: true, channels: ids.map((id) => ({ number: 100 + id, mediaType: 1, localId: id })) });
+  engine.handleChannelStatusPage(dev, page([1, 2]));
+  engine.handleChannelStatusPage(dev, page([3, 4]));
+  engine.handleChannelStatusPage(dev, page([5, 6]));
+  assert.deepEqual(sent, [[1, 3], [1, 5], [1, 7]]);
 });
