@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.0
+
+### Preferences
+- A gear button in the header opens Preferences. The status feed for other tools (`/api/network-status`) can be switched off there, or also served on a port of your choosing. That port answers only the feed. The dialog shows the addresses to hand out and says so if the chosen port is already in use.
+
 ## 2.4.1
 
 ### Much less traffic on the Dante network

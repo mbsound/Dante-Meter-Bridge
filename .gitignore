@@ -38,3 +38,7 @@ logs/
 custom-layout.json
 custom-layout.json.tmp
 custom-layout.json.unreadable
+
+# Settings changed from the web UI
+preferences.json
+preferences.json.tmp

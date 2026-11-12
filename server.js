@@ -15,6 +15,7 @@ const { createWebServer } = require('./lib/web/server');
 const { EventLog } = require('./lib/events/event-log');
 const { NetworkMonitor } = require('./lib/events/monitor');
 const { CustomLayouts } = require('./lib/custom-layout');
+const { Preferences } = require('./lib/preferences');
 const { version } = require('./package.json');
 
 function main() {
@@ -57,7 +58,8 @@ function main() {
   engine.on('interface-restored', (iface) => monitor.interfaceRestored(iface));
 
   const customLayouts = new CustomLayouts({ file: config.customLayoutFile, log }).load();
-  const web = createWebServer({ engine, eventLog, customLayouts, version, log });
+  const preferences = new Preferences({ file: config.preferencesFile, log }).load();
+  const web = createWebServer({ engine, eventLog, customLayouts, preferences, host: config.host, version, log });
   const localUrl = `http://localhost:${config.port}`;
 
   web.server.on('error', (err) => {

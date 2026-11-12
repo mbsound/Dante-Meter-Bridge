@@ -314,6 +314,9 @@
       case 'health':
         renderHealth(msg.data);
         break;
+      case 'preferences':
+        if (window.DantePreferences) window.DantePreferences.receive(msg.data);
+        break;
       case 'events':
       case 'event':
       case 'events_cleared':

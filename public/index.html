@@ -62,7 +62,53 @@
       </button>
     </nav>
 
+    <button class="btn btn-icon-only btn-preferences" id="btnPreferences" type="button" title="Preferences" aria-label="Preferences">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/>
+      </svg>
+    </button>
+
   </header>
+
+  <dialog class="pref-dialog" id="preferencesDialog" aria-labelledby="prefTitle">
+    <form id="preferencesForm" novalidate>
+      <h2 id="prefTitle">Preferences</h2>
+
+      <section class="pref-section">
+        <h3>Status feed for other tools</h3>
+        <p class="pref-help">A small read-only summary (device names, online or offline, primary and secondary link) that a status board or script on your network can fetch. It cannot change anything on the bridge.</p>
+
+        <label class="pref-check">
+          <input type="checkbox" id="prefStatusEnabled">
+          <span>Let other tools read the status feed</span>
+        </label>
+
+        <div class="pref-field">
+          <label for="prefStatusPortMode">Port</label>
+          <select id="prefStatusPortMode">
+            <option value="ui">Same as this web page</option>
+            <option value="own">Also on its own port</option>
+          </select>
+          <span class="pref-note">This web page uses port <strong id="prefStatusUiPort"></strong>.</span>
+        </div>
+
+        <div class="pref-field" id="prefStatusPortRow" hidden>
+          <label for="prefStatusPort">Port number</label>
+          <input type="number" id="prefStatusPort" min="1" max="65535" step="1" inputmode="numeric" placeholder="e.g. 8080">
+          <span class="pref-note">That port answers only the status feed, nothing else.</span>
+        </div>
+
+        <p class="pref-state" id="prefStatusState" role="status"></p>
+        <ul class="pref-urls" id="prefStatusUrls" hidden></ul>
+      </section>
+
+      <p class="pref-error" id="prefError" role="alert" hidden></p>
+      <div class="pref-actions">
+        <button class="btn" type="button" id="btnPrefClose">Close</button>
+        <button class="btn btn-primary" type="submit" id="btnPrefSave">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="health-banner" id="healthBanner" role="alert" hidden></div>
 
@@ -197,6 +243,7 @@
 
   <script src="levels.js"></script>
   <script src="eventlog.js"></script>
+  <script src="preferences.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -178,6 +178,7 @@ Receivers without their own meters show the level of the transmitter channel the
 | `GET /api/devices` | All devices with structure and current levels. `levels.tx.peak` / `levels.rx.peak` are raw Dante level bytes (`null` = no recent data). `dbfs` holds the same levels in dBFS (`null` = silent or no data). |
 | `GET /api/status` | Health: version, uptime, bound interface, device counts, connected clients |
 | `GET /api/network-status` | Compact per-device summary for outside tools to poll: name, online, since when, and primary / secondary status. Readable from other web pages. See [Status for other tools](#status-for-other-tools) |
+| `GET` / `POST /api/preferences` | Settings from the Preferences dialog: `{"statusApi": {"enabled": true, "port": null}}` |
 | `GET /api/interfaces` | Available network interfaces |
 | `POST /api/interface` | Switch interface: `{"ip": "169.254.x.x"}` or `{"ip": "all"}` |
 | `POST /api/refresh` | Drop offline devices and re-poll the network |
@@ -191,6 +192,8 @@ Receivers without their own meters show the level of the transmitter channel the
 ### Status for other tools
 
 `GET /api/network-status` is a small summary meant to be polled every minute or two by something outside the bridge, such as a status board or a spreadsheet script. Answering it reads only what the bridge already holds in memory; it sends nothing to the Dante network.
+
+The gear button in the header opens **Preferences**, where the feed can be switched off (it then answers 404) or given a port of its own. That extra port answers only this feed, so it can be opened to a wider network without exposing the rest of the bridge; the feed also stays on the web page's port. The settings are kept in `preferences.json` next to the app. `GET /api/preferences` returns them along with the addresses the feed is being served on.
 
 ```json
 {
