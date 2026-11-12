@@ -760,3 +760,77 @@ test('network status: per-device summary by name, and devices that drop off stay
   status = engine.getNetworkStatus();
   assert.deepEqual(status.devices.filter((d) => d.name === 'Stagebox-1').map((d) => [d.online, d.primary.ip]), [[true, '169.254.1.50']]);
 });
+
+test('clock and interface queries: one at a time until a device answers, then only that form, rarely', () => {
+  const engine = makeEngine();
+  engine.handleArc(countsReply(1, 1), from('169.254.1.10'));
+  const dev = engine.devices.get('169.254.1.10');
+  const builders = [() => Buffer.from('status'), () => Buffer.from('control')];
+  const sent = () => engine.sent.filter((s) => s.sock === 'SETTINGS' && ['status', 'control'].includes(s.buf.toString()));
+  const clear = () => (engine.sent = []);
+  dev.settingsPolls = {};
+  let t = 1000000;
+  const poll = () => engine.settingsPoll('169.254.1.10', 'clock', builders, TIMING.CLOCK_POLL_INTERVAL, t);
+
+  // Probing: a single packet per poll, each form and port in turn, never faster than the probe interval.
+  clear();
+  poll();
+  poll();
+  assert.equal(sent().length, 1, 'one packet, and nothing more until the next one is due');
+  const seen = [`${sent()[0].buf}:${sent()[0].port}`];
+  for (let i = 0; i < 3; i++) {
+    t += TIMING.SETTINGS_PROBE_INTERVAL;
+    clear();
+    poll();
+    assert.equal(sent().length, 1);
+    seen.push(`${sent()[0].buf}:${sent()[0].port}`);
+  }
+  assert.equal(new Set(seen).size, 4, 'both forms on both ports');
+
+  // The device answers the fourth: from now on only that one, at the slow interval.
+  const winner = seen[3];
+  engine.settingsAnswered(dev, 'clock', t + 200);
+  for (let i = 0; i < 3; i++) {
+    t += TIMING.SETTINGS_PROBE_INTERVAL;
+    clear();
+    poll();
+    assert.equal(sent().length, 0, 'not due yet');
+  }
+  t += TIMING.CLOCK_POLL_INTERVAL;
+  clear();
+  poll();
+  assert.deepEqual(sent().map((s) => `${s.buf}:${s.port}`), [winner]);
+  engine.settingsAnswered(dev, 'clock', t + 100);
+
+  // It stops answering: after three misses the search starts again.
+  for (let i = 0; i < 4; i++) {
+    t += TIMING.CLOCK_POLL_INTERVAL;
+    poll();
+  }
+  assert.equal(dev.settingsPolls.clock.locked, null);
+
+  // A device that never answers is asked less and less.
+  const quiet = { tries: 0 };
+  engine.handleArc(countsReply(1, 1), from('169.254.1.11'));
+  engine.devices.get('169.254.1.11').settingsPolls = {};
+  clear();
+  for (let i = 0; i < 40; i++) {
+    t += TIMING.SETTINGS_PROBE_INTERVAL;
+    engine.settingsPoll('169.254.1.11', 'clock', builders, TIMING.CLOCK_POLL_INTERVAL, t);
+  }
+  quiet.tries = sent().filter((s) => s.host === '169.254.1.11').length;
+  assert.ok(quiet.tries <= 12, `${quiet.tries} packets in two minutes`);
+});
+
+test('mDNS questions: a few quickly after binding, then only every 30 seconds', () => {
+  const engine = makeEngine();
+  const count = () => engine.sent.filter((s) => s.sock === 'MDNS').length;
+  let t = 1000000;
+  engine.sendMdnsQueries({ force: true, now: t });
+  for (let i = 0; i < 20; i++) engine.sendMdnsQueries({ now: (t += TIMING.DISCOVERY_INTERVAL) });
+  // 5 fast rounds, then one round per 30 s over the remaining ~48 s; two services per round.
+  assert.equal(count(), (TIMING.MDNS_FAST_QUERIES + 1) * 2);
+  engine.sent = [];
+  engine.sendMdnsQueries({ force: true, now: t });
+  assert.equal(count(), 2, 'Refresh or an interface change asks again straight away');
+});

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.1
+
+### Much less traffic on the Dante network
+- Devices answer clock and network-interface queries by multicast, so every computer on the Dante network receives every answer. The bridge asked each device up to eight of these every 3 seconds; on a 24-device network that produced about 47 multicast packets a second for everyone, including other computers running Dante Controller. It now sends one query at a time until it finds the form a device answers, then asks only that: clock every 15 seconds, interfaces every 60 seconds. Devices still report changes by themselves as they happen.
+- mDNS questions (which make every device re-announce itself) go out a few times at start-up, on Refresh and on an interface change, then every 30 seconds instead of every 3.
+
 ## 2.4.0
 
 ### Status for other tools

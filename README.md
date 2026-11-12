@@ -162,7 +162,7 @@ Dante devices ──(UDP)──▶ Meter Bridge (Node.js) ──(WebSocket)─�
 |---|---|
 | Discovery | mDNS (`_netaudio-arc._udp`, `_netaudio-cmc._udp`), Dante heartbeats (224.0.0.233:8708), device-info multicast (224.0.0.231:8702) and probing hosts in the ARP table |
 | Names, channels, routing, sample rate | ARC queries (UDP 4440) every 3 s |
-| Clock and secondary network | Settings queries (UDP 8700/8702) and heartbeat link status. The clock leader is identified from the PTP grandmaster ID. |
+| Clock and secondary network | Settings queries (UDP 8700/8702) and heartbeat link status. Devices answer these by multicast to the whole network, so the bridge asks sparingly: clock every 15 s and interfaces every 60 s per device. The clock leader is identified from the PTP grandmaster ID. |
 | Levels | A metering subscription sent to each device (UDP 8800). The device then streams levels to the bridge on UDP 8751, about 10 times per second on the devices tested. The server forwards the latest levels to browsers 20 times per second, and each meter is redrawn only when its value changes. |
 
 **Metering.** The bridge asks each device to stream its meters to this computer, identifying itself by its own MAC address. This is the same request Dante Controller sends, so each Controller and each bridge gets its own independent stream. If another app on this computer already uses port 8751, the bridge picks a free port and tells the devices to use that instead. On shutdown, the bridge tells every device to stop streaming.
